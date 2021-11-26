@@ -176,7 +176,7 @@ class ResNet(nn.Module):
         return torch.cat(grads)
 
 
-def resnet18(nclasses: int, nf: int=64) -> ResNet:
+def resnet18(nclasses: int, nf: int=64, **kwargs) -> ResNet:
     """
     Instantiates a ResNet18 network.
     :param nclasses: number of output classes

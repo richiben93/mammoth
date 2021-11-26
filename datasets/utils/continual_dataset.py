@@ -8,9 +8,12 @@ from argparse import Namespace
 from torch import nn as nn
 from torchvision.transforms import transforms
 from torch.utils.data import DataLoader
-from typing import Tuple
+from typing import Tuple, Union
 from torchvision import datasets
 import numpy as np
+import socket
+import torch
+import os
 
 
 class ContinualDataset:
@@ -94,29 +97,52 @@ class ContinualDataset:
 
 
 def store_masked_loaders(train_dataset: datasets, test_dataset: datasets,
-                    setting: ContinualDataset) -> Tuple[DataLoader, DataLoader]:
+                         setting: ContinualDataset, class_order: Union[None, np.array] = None) -> Tuple[DataLoader,
+                                                                                                        DataLoader]:
     """
     Divides the dataset into tasks.
     :param train_dataset: train dataset
     :param test_dataset: test dataset
     :param setting: continual learning setting
+    :param class_order
     :return: train and test loaders
     """
-    train_mask = np.logical_and(np.array(train_dataset.targets) >= setting.i,
-        np.array(train_dataset.targets) < setting.i + setting.N_CLASSES_PER_TASK)
-    test_mask = np.logical_and(np.array(test_dataset.targets) >= setting.i,
-        np.array(test_dataset.targets) < setting.i + setting.N_CLASSES_PER_TASK)
 
-    train_dataset.data = train_dataset.data[train_mask]
-    test_dataset.data = test_dataset.data[test_mask]
+    if class_order is not None:
+        train_dataset.targets = class_order[np.array(train_dataset.targets)]
+        test_dataset.targets = class_order[np.array(test_dataset.targets)]
 
-    train_dataset.targets = np.array(train_dataset.targets)[train_mask]
-    test_dataset.targets = np.array(test_dataset.targets)[test_mask]
+    if 'seq-ilsvrc' not in setting.NAME:
+        train_mask = np.logical_and(np.array(train_dataset.targets) >= setting.i,
+                                    np.array(train_dataset.targets) < setting.i + setting.N_CLASSES_PER_TASK)
+        test_mask = np.logical_and(np.array(test_dataset.targets) >= setting.i,
+                                   np.array(test_dataset.targets) < setting.i + setting.N_CLASSES_PER_TASK)
 
-    train_loader = DataLoader(train_dataset,
-                              batch_size=setting.args.batch_size, shuffle=True, num_workers=0)
-    test_loader = DataLoader(test_dataset,
-                             batch_size=setting.args.batch_size, shuffle=False, num_workers=0)
+        if not hasattr(train_dataset, 'lazy_load') or not train_dataset.lazy_load:
+            train_dataset.data = train_dataset.data[train_mask]
+        if not hasattr(test_dataset, 'lazy_load') or not test_dataset.lazy_load:
+            test_dataset.data = test_dataset.data[test_mask]
+
+        train_dataset.targets = np.array(train_dataset.targets)[train_mask]
+        test_dataset.targets = np.array(test_dataset.targets)[test_mask]
+
+    if 'MAMMOTH_RANK' not in os.environ:
+        train_loader = DataLoader(train_dataset,
+                                  batch_size=setting.args.batch_size, shuffle=True,
+                                  num_workers=0 if socket.gethostname() == 'jojo' else 4)
+    else:
+        train_loader = DataLoader(train_dataset,
+                                  batch_size=setting.args.batch_size, num_workers=4,
+                                  sampler=torch.utils.data.DistributedSampler(train_dataset, shuffle=True))
+        ## let's leave test on a single node
+        # test_loader = DataLoader(test_dataset,
+        #                         batch_size=setting.args.batch_size, num_workers=4, sampler=torch.utils.data.DistributedSampler(train_dataset, shuffle=False))
+    if not 'MAMMOTH_SLAVE' in os.environ:
+        test_loader = DataLoader(test_dataset,
+                                 batch_size=setting.args.batch_size, shuffle=False,
+                                 num_workers=0 if socket.gethostname() == 'jojo' else 4)
+    else:
+        test_loader = None
     setting.test_loaders.append(test_loader)
     setting.train_loader = train_loader
 
@@ -134,8 +160,8 @@ def get_previous_train_loader(train_dataset: datasets, batch_size: int,
     :return: a dataloader
     """
     train_mask = np.logical_and(np.array(train_dataset.targets) >=
-        setting.i - setting.N_CLASSES_PER_TASK, np.array(train_dataset.targets)
-        < setting.i - setting.N_CLASSES_PER_TASK + setting.N_CLASSES_PER_TASK)
+                                setting.i - setting.N_CLASSES_PER_TASK, np.array(train_dataset.targets)
+                                < setting.i - setting.N_CLASSES_PER_TASK + setting.N_CLASSES_PER_TASK)
 
     train_dataset.data = train_dataset.data[train_mask]
     train_dataset.targets = np.array(train_dataset.targets)[train_mask]
