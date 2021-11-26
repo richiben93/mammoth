@@ -10,7 +10,7 @@ from torch.nn.functional import relu, avg_pool2d
 from typing import List
 
 
-def conv3x3(in_planes: int, out_planes: int, stride: int=1) -> F.conv2d:
+def conv3x3(in_planes: int, out_planes: int, stride: int = 1) -> F.conv2d:
     """
     Instantiates a 3x3 convolutional layer with no bias.
     :param in_planes: number of input channels
@@ -28,7 +28,7 @@ class BasicBlock(nn.Module):
     """
     expansion = 1
 
-    def __init__(self, in_planes: int, planes: int, stride: int=1) -> None:
+    def __init__(self, in_planes: int, planes: int, stride: int = 1) -> None:
         """
         Instantiates the basic block of the network.
         :param in_planes: the number of input channels
@@ -126,7 +126,7 @@ class ResNet(nn.Module):
         out = self.layer2(out)  # 128, 16, 16
         out = self.layer3(out)  # 256, 8, 8
         out = self.layer4(out)  # 512, 4, 4
-        out = avg_pool2d(out, out.shape[2]) # 512, 1, 1
+        out = avg_pool2d(out, out.shape[2])  # 512, 1, 1
         out = out.view(out.size(0), -1)  # 512
         out = self.linear(out)
         return out
@@ -161,7 +161,7 @@ class ResNet(nn.Module):
         progress = 0
         for pp in list(self.parameters()):
             cand_params = new_params[progress: progress +
-                torch.tensor(pp.size()).prod()].view(pp.size())
+                                               torch.tensor(pp.size()).prod()].view(pp.size())
             progress += torch.tensor(pp.size()).prod()
             pp.data = cand_params
 
@@ -176,7 +176,7 @@ class ResNet(nn.Module):
         return torch.cat(grads)
 
 
-def resnet18(nclasses: int, nf: int=64, **kwargs) -> ResNet:
+def resnet18(nclasses: int, nf: int = 64, **kwargs) -> ResNet:
     """
     Instantiates a ResNet18 network.
     :param nclasses: number of output classes
@@ -184,3 +184,7 @@ def resnet18(nclasses: int, nf: int=64, **kwargs) -> ResNet:
     :return: ResNet network
     """
     return ResNet(BasicBlock, [2, 2, 2, 2], nclasses, nf)
+
+
+def lopeznet(nclasses: int) -> ResNet:
+    return ResNet(BasicBlock, [2, 2, 2, 2], nclasses, 20)

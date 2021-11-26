@@ -5,7 +5,7 @@
 
 from torchvision.datasets import CIFAR100
 import torchvision.transforms as transforms
-from backbone.ResNet18 import resnet18
+from backbone.ResNet18 import resnet18, lopeznet
 import torch.nn.functional as F
 import numpy as np
 from utils.conf import base_path
@@ -151,10 +151,12 @@ class SequentialCIFAR100_17x5(ContinualDataset):
     N_TASKS = 17
     SELECTED_CLASS = np.arange(15, 100)
     TRANSFORM = transforms.Compose(
-        [transforms.RandomCrop(32, padding=4),
-         transforms.ToTensor(),
-         transforms.Normalize((0.5071, 0.4867, 0.4408),
-                              (0.2675, 0.2565, 0.2761))])
+        [
+            # transforms.RandomCrop(32, padding=4),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5071, 0.4867, 0.4408),
+                                 (0.2675, 0.2565, 0.2761))
+        ])
 
     def get_examples_number(self):
         train_dataset = MyCIFAR100(base_path() + self.DATASET_NAME, train=True,
@@ -199,10 +201,8 @@ class SequentialCIFAR100_17x5(ContinualDataset):
 
     @staticmethod
     def get_backbone(hookme=False):
-        # return resnet34(SequentialCIFAR100.N_CLASSES_PER_TASK
-        #                 * SequentialCIFAR100.N_TASKS)
-        return resnet18(SequentialCIFAR100_17x5.N_CLASSES_PER_TASK
-                        * SequentialCIFAR100_17x5.N_TASKS, hookme=hookme)
+        return lopeznet(SequentialCIFAR100_17x5.N_CLASSES_PER_TASK
+                        * SequentialCIFAR100_17x5.N_TASKS)
 
     @staticmethod
     def get_loss():
@@ -280,10 +280,8 @@ class SequentialCIFAR100_3x5(ContinualDataset):
 
     @staticmethod
     def get_backbone(hookme=False):
-        # return resnet34(SequentialCIFAR100.N_CLASSES_PER_TASK
-        #                 * SequentialCIFAR100.N_TASKS)
-        return resnet18(SequentialCIFAR100_3x5.N_CLASSES_PER_TASK
-                        * SequentialCIFAR100_3x5.N_TASKS, hookme=hookme)
+        return lopeznet(SequentialCIFAR100_17x5.N_CLASSES_PER_TASK
+                        * SequentialCIFAR100_17x5.N_TASKS)
 
     @staticmethod
     def get_loss():
