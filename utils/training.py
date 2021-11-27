@@ -7,7 +7,7 @@ import torch
 from utils.status import progress_bar, create_stash
 from utils.tb_logger import *
 from utils.loggers import *
-from utils.loggers import CsvLogger
+from utils.loggers import CsvLogger, DictxtLogger
 from argparse import Namespace
 from models.utils.continual_model import ContinualModel
 from datasets.utils.continual_dataset import ContinualDataset
@@ -84,7 +84,8 @@ def train(model: ContinualModel, dataset: ContinualDataset,
     model_stash = create_stash(model, args, dataset)
 
     if args.csv_log:
-        csv_logger = CsvLogger(dataset.SETTING, dataset.NAME, model.NAME)
+        #csv_logger = CsvLogger(dataset.SETTING, dataset.NAME, model.NAME)
+        csv_logger = DictxtLogger(dataset.SETTING, dataset.NAME, model.NAME)
     if args.tensorboard:
         tb_logger = TensorboardLogger(args, dataset.SETTING, model_stash)
         model_stash['tensorboard_name'] = tb_logger.get_name()

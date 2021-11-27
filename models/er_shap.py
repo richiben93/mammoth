@@ -18,6 +18,8 @@ def get_parser() -> ArgumentParser:
     add_management_args(parser)
     add_experiment_args(parser)
     add_rehearsal_args(parser)
+    parser.add_argument('--shap_weight', type=float, required=True,
+                        help='Penalty weight.')
     return parser
 
 
@@ -64,9 +66,9 @@ class ErShap(ContinualModel):
             shap_loss = 0
 
         loss = self.loss(masked_outputs, labels % self.classes)
-        with open('loss_task', 'a') as obj:
-            obj.write(f'{self.task}, {loss}, {shap_loss}\n')
-        loss += shap_loss
+        # with open('loss_task', 'a') as obj:
+        #     obj.write(f'{self.task}, {loss}, {shap_loss}\n')
+        loss += shap_loss * self.args.shap_weight
         loss.backward()
         self.opt.step()
 
