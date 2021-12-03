@@ -30,7 +30,7 @@ class BatchShapingLoss(nn.Module):
     def beta_cdf(self, b: torch.Tensor, npts: int = 1000):
         x = mylinspace(torch.zeros(b.shape[0]).to(b.device)+1e-10, b, npts)
         start = 0
-        if self.distro.log_prob(x[0, 0]).exp().item() > 1:
+        if self.distro.log_prob(x[0, 0].to('cpu')).exp().item() > 1:
             start = 1
         return torch.Tensor([torch.trapz(self.distro.log_prob(x[start:, i].to('cpu')).exp(), x[start:, i].to('cpu')).to(x.device)
                              for i in range(x.shape[1])])

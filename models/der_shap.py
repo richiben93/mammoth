@@ -67,6 +67,6 @@ class DerShap(ContinualModel):
 
     def end_task(self, dataset):
         self.task += 1
-        if self.task == self.n_task:
-            with open(f'/homes/efrascaroli/output/logits_buffer_sw{self.args.shap_weight}.pkl', 'wb') as f:
-                pickle.dump((self.buffer.logits.cpu().detach(), self.buffer.labels.cpu().detach()), f)
+        # if self.task == self.n_task:
+        #     with open(f'/homes/efrascaroli/output/logits_buffer_sw{self.args.shap_weight}.pkl', 'wb') as f:
+        #         pickle.dump((self.buffer.logits.cpu().detach(), self.buffer.labels.cpu().detach()), f)

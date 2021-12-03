@@ -3,6 +3,8 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 import os.path
+import pickle
+
 from torch.functional import F
 import torch
 from utils.buffer import Buffer
@@ -10,17 +12,21 @@ from utils.args import *
 from models.utils.continual_model import ContinualModel
 from datasets import get_dataset
 from utils.batch_shaping import BatchShapingLoss
-import wandb
+# import wandb
 
 
 def get_parser() -> ArgumentParser:
     parser = ArgumentParser(description='Continual learning via'
-                                        ' Experience Replay with Shapiro.')
+                                        ' Experience Replay with BetaShaping.')
     add_management_args(parser)
     add_experiment_args(parser)
     add_rehearsal_args(parser)
     parser.add_argument('--bs_weight', type=float, required=True,
                         help='Penalty weight.')
+    parser.add_argument('--alpha', type=float, default=0.6,
+                        help='Alpha of the Beta distribution.')
+    parser.add_argument('--beta', type=float, default=0.4,
+                        help='Beta of the Beta distribution.')
     return parser
 
 
@@ -39,11 +45,11 @@ class ErBs(ContinualModel):
         self.task = 0
         self.classes = get_dataset(args).N_CLASSES_PER_TASK
         self.n_task = get_dataset(args).N_TASKS
-        self.bs_loss = BatchShapingLoss()
-        if os.path.isfile('loss_task'):
-            os.remove('loss_task')
-        with open('loss_task', 'w') as obj:
-            obj.write(f'task, loss, shapiro_loss\n')
+        self.bs_loss = BatchShapingLoss(alpha=self.args.alpha, beta=self.args.beta)
+        # if os.path.isfile('loss_task'):
+        #     os.remove('loss_task')
+        # with open('loss_task', 'w') as obj:
+        #     obj.write(f'task, loss, shapiro_loss\n')
 
     def observe(self, inputs, labels, not_aug_inputs):
         real_batch_size = inputs.shape[0]
@@ -60,7 +66,7 @@ class ErBs(ContinualModel):
         eye = torch.eye(self.n_task).bool()
         mask = torch.repeat_interleave(eye[task_labels], self.classes, 1)
         masked_outputs = outputs[mask].reshape(inputs.shape[0], -1)
-        if self.task+1 < self.n_task:
+        if self.task+1 < self.n_task and self.args.bs_weight > 0:
             masked_futures = outputs[:, (self.task+1)*self.classes: (self.task+2)*self.classes]
             bs_loss = self.bs_loss(F.softmax(masked_futures, dim=1))
         else:
@@ -81,6 +87,19 @@ class ErBs(ContinualModel):
 
     def end_task(self, dataset):
         self.task += 1
+        if self.task == 1:
+            with torch.no_grad():
+                with open(f'/homes/efrascaroli/output/logits_buffer_bs{self.args.bs_weight}_a{self.args.alpha}_b{self.args.beta}.pkl', 'wb') as f:
+                    buf_inputs, buf_labels = self.buffer.get_data(self.buffer.buffer_size, transform=self.transform)
+                    outputs = self.net(buf_inputs)
+                    pickle.dump((
+                        outputs[:, :5].cpu().detach(),
+                        outputs[:, 5:10].cpu().detach(),
+                        F.softmax(outputs[:, :5], dim=1).cpu().detach(),
+                        F.softmax(outputs[:, 5:10], dim=1).cpu().detach(),
+                        buf_labels.cpu().detach()
+                    ), f)
+
         # status = self.net.training
         # self.net.eval()
         # shapiri_test_total = torch.zeros(self.classes*self.n_task).to(self.device)
