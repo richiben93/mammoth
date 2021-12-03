@@ -4,7 +4,7 @@ from torch import nn
 
 class BatchShapingLoss(nn.Module):
 
-    def __init__(self, alpha: int = 0.6, beta: int = 0.4):
+    def __init__(self, alpha: float = 0.6, beta: float = 0.4):
         super(BatchShapingLoss, self).__init__()
         self.distro = torch.distributions.beta.Beta(torch.Tensor([alpha]), torch.Tensor([beta]))
         self.cache = {}
@@ -27,7 +27,7 @@ class BatchShapingLoss(nn.Module):
     def bs_test(self, x: torch.Tensor):
         pass
 
-    def beta_cdf(self, b: torch.Tensor, npts=100):
+    def beta_cdf(self, b: torch.Tensor, npts: int = 1000):
         x = mylinspace(torch.zeros(b.shape[0]).to(b.device)+1e-10, b, npts)
         return torch.Tensor([torch.trapz(self.distro.log_prob(x[:, i].to('cpu')).exp(), x[:, i].to('cpu')).to(x.device)
                              for i in range(x.shape[1])])
