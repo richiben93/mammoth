@@ -13,6 +13,7 @@ from models.utils.continual_model import ContinualModel
 from datasets import get_dataset
 from utils.batch_shaping import BatchShapingLoss
 # import wandb
+import math
 
 
 def get_parser() -> ArgumentParser:
@@ -53,6 +54,7 @@ class ErBs(ContinualModel):
 
     def observe(self, inputs, labels, not_aug_inputs):
         real_batch_size = inputs.shape[0]
+        # labels = labels.long()
 
         self.opt.zero_grad()
         if not self.buffer.is_empty():
@@ -68,7 +70,7 @@ class ErBs(ContinualModel):
         masked_outputs = outputs[mask].reshape(inputs.shape[0], -1)
         if self.task+1 < self.n_task and self.args.bs_weight > 0:
             masked_futures = outputs[:, (self.task+1)*self.classes: (self.task+2)*self.classes]
-            bs_loss = self.bs_loss(F.softmax(masked_futures, dim=1))
+            bs_loss = self.bs_loss(torch.sigmoid(masked_futures))
         else:
             bs_loss = 0
 
@@ -89,7 +91,10 @@ class ErBs(ContinualModel):
         self.task += 1
         if self.task == 1:
             with torch.no_grad():
-                with open(f'/homes/efrascaroli/output/logits_buffer_bs{self.args.bs_weight}_a{self.args.alpha}_b{self.args.beta}.pkl', 'wb') as f:
+                with open(f'/homes/efrascaroli/output/logits_buffer_pre_bs{self.args.bs_weight}_a{self.args.alpha}_b{self.args.beta}.pkl', 'wb') as f:
+                # with open(
+                #         f'C:\\Users\\emace\\AImageLab\\SRV-Continual\\tmp\\logits_buffer_pre_bs{self.args.bs_weight}_a{self.args.alpha}_b{self.args.beta}.pkl',
+                #         'wb') as f:
                     buf_inputs, buf_labels = self.buffer.get_data(self.buffer.buffer_size, transform=self.transform)
                     outputs = self.net(buf_inputs)
                     pickle.dump((
