@@ -63,13 +63,17 @@ class ErBs(ContinualModel):
             inputs = torch.cat((inputs, buf_inputs))
             labels = torch.cat((labels, buf_labels))
 
-        outputs = self.net(inputs)
+        # outputs = self.net(inputs)
+        features = self.net.features(inputs)
+        outputs = self.net.linear(features)
+
         task_labels = labels // self.classes
         eye = torch.eye(self.n_task).bool()
         mask = torch.repeat_interleave(eye[task_labels], self.classes, 1)
         masked_outputs = outputs[mask].reshape(inputs.shape[0], -1)
         if self.task+1 < self.n_task and self.args.bs_weight > 0:
-            masked_futures = outputs[:, (self.task+1)*self.classes: (self.task+2)*self.classes]
+            bs_outputs = self.net.linear(features.detach().clone())
+            masked_futures = bs_outputs[:, (self.task+1)*self.classes: (self.task+2)*self.classes]
             bs_loss = self.bs_loss(torch.sigmoid(masked_futures))
         else:
             bs_loss = 0
