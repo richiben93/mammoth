@@ -141,7 +141,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         accs = evaluate(model, dataset)
         mean_acc = np.mean(accs, axis=1)
         if hasattr(model, 'log_accs'):
-            model.log_accs(mean_acc.tolist())
+            model.log_accs(accs)
 
         results.append(accs[0])
         results_mask_classes.append(accs[1])
