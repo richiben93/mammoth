@@ -10,6 +10,7 @@ from utils.args import *
 from models.utils.continual_model import ContinualModel
 from datasets import get_dataset
 from utils.shapiry import MaskedShapiroShapingGaussianLoss
+import wandb
 
 
 def get_parser() -> ArgumentParser:
@@ -66,6 +67,7 @@ class ErShap(ContinualModel):
             shap_loss = 0
 
         loss = self.loss(masked_outputs, labels % self.classes)
+        wandb.log({'loss': loss, 'shap_loss': shap_loss})
         # with open('loss_task', 'a') as obj:
         #     obj.write(f'{self.task}, {loss}, {shap_loss}\n')
         loss += shap_loss * self.args.shap_weight
@@ -79,3 +81,22 @@ class ErShap(ContinualModel):
 
     def end_task(self, dataset):
         self.task += 1
+        status = self.net.training
+        self.net.eval()
+        shapiri_test_total = torch.zeros(self.classes*self.n_task).to(self.device)
+        for k, test_loader in enumerate(dataset.test_loaders):
+            shapiri_test = torch.zeros(self.classes * self.n_task).to(self.device)
+            for n, data in enumerate(test_loader):
+                inputs, labels = data
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                if 'class-il' not in self.COMPATIBILITY:
+                    outputs = self.net(inputs, k)
+                else:
+                    outputs = self.net(inputs)
+                shapiri_test += self.shapiro_loss.shapiro_test(outputs)
+            shapiri_test /= n+1
+            shapiri_test_total += shapiri_test
+        shapiri_test_total /= k+1
+        # wandb.log({f"{num}": shapiri_test_total[num].item() for num in range(shapiri_test_total.shape[0])})
+        # wandb.log({'logits': shapiri_test_total})
+        self.net.train(status)

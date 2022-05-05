@@ -39,6 +39,10 @@ def add_management_args(parser: ArgumentParser) -> None:
                         help='Enable tensorboard logging')
     parser.add_argument('--validation', action='store_true',
                         help='Test on the validation set')
+    parser.add_argument('--enable_wandb', action='store_true',
+                        help='Weather use or not the wandb logger')
+    parser.add_argument('--experiment_name', default='generic-experiment',
+                        help='Experiment name to log in wandb')
 
 
 def add_rehearsal_args(parser: ArgumentParser) -> None:

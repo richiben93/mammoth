@@ -5,8 +5,15 @@
 import socket
 import os
 import random
+from time import sleep
+
 import torch
 import numpy as np
+import os
+
+local = False if 'SSH_CONNECTION' in os.environ else True
+force_cpu = True
+
 
 def get_device(jobs_per_gpu=10) -> torch.device:
     """
@@ -24,21 +31,22 @@ def get_device(jobs_per_gpu=10) -> torch.device:
                 return torch.device('cuda:{}'.format('0' if unique.item() == 1 else '1'))
             sleep((random.random() + 1) * 5)
     else:
-        return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        return torch.device("cuda:0" if torch.cuda.is_available() and not force_cpu else "cpu")
 
 
 def base_path() -> str:
     """
     Returns the base bath where to log accuracies and tensorboard data.
     """
-    return './data/'
+    return './data/' if local or os.uname().nodename in ('ammarella', 'dragon', 'goku') \
+        else '/nas/softechict-nas-1/rbenaglia/data/'
 
 
 def base_path_dataset() -> str:
     """
     Returns the base bath where to log accuracies and tensorboard data.
     """
-    return '/tmp/mbosc/'
+    return '/tmp/rbenaglia/'
 
 
 def set_random_seed(seed: int) -> None:

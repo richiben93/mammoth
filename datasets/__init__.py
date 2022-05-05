@@ -10,6 +10,7 @@ from datasets.seq_cifar100 import (SequentialCIFAR100_3x5, SequentialCIFAR100_17
 from datasets.rot_mnist import RotatedMNIST
 from datasets.seq_tinyimagenet import SequentialTinyImagenet
 from datasets.mnist_360 import MNIST360
+from datasets.seq_celeba import SequentialCelebA
 from datasets.utils.continual_dataset import ContinualDataset
 from argparse import Namespace
 
@@ -21,7 +22,8 @@ NAMES = {
     SequentialTinyImagenet.NAME: SequentialTinyImagenet,
     MNIST360.NAME: MNIST360,
     SequentialCIFAR100_3x5.NAME: SequentialCIFAR100_3x5,
-    SequentialCIFAR100_17x5.NAME: SequentialCIFAR100_17x5
+    SequentialCIFAR100_17x5.NAME: SequentialCIFAR100_17x5,
+    SequentialCelebA.NAME: SequentialCelebA
 }
 
 GCL_NAMES = {

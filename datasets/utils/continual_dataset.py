@@ -119,9 +119,19 @@ def store_masked_loaders(train_dataset: datasets, test_dataset: datasets,
                                    np.array(test_dataset.targets) < setting.i + setting.N_CLASSES_PER_TASK)
 
         if not hasattr(train_dataset, 'lazy_load') or not train_dataset.lazy_load:
-            train_dataset.data = train_dataset.data[train_mask]
+            if hasattr(train_dataset, 'NAME'):
+                if train_dataset.NAME == 'celeba':
+                    train_dataset.filename = np.array(train_dataset.filename)[train_mask].tolist()
+                    train_dataset.attr = train_dataset.attr[train_mask]
+            else:
+                train_dataset.data = train_dataset.data[train_mask]
         if not hasattr(test_dataset, 'lazy_load') or not test_dataset.lazy_load:
-            test_dataset.data = test_dataset.data[test_mask]
+            if hasattr(train_dataset, 'NAME'):
+                if test_dataset.NAME == 'celeba':
+                    test_dataset.filename = np.array(test_dataset.filename)[test_mask].tolist()
+                    test_dataset.attr = test_dataset.attr[test_mask]
+            else:
+                test_dataset.data = test_dataset.data[test_mask]
 
         train_dataset.targets = np.array(train_dataset.targets)[train_mask]
         test_dataset.targets = np.array(test_dataset.targets)[test_mask]

@@ -8,6 +8,8 @@ import numpy as np
 import os
 import sys
 import socket
+import wandb
+
 conf_path = os.getcwd()
 sys.path.append(conf_path)
 # sys.path.append(conf_path + '/datasets')
@@ -38,6 +40,8 @@ def lecun_fix():
     opener = urllib.request.build_opener()
     opener.addheaders = [('User-agent', 'Mozilla/5.0')]
     urllib.request.install_opener(opener)
+
+
 def parse_args():
     parser = ArgumentParser(description='mammoth', allow_abbrev=False)
     parser.add_argument('--model', type=str, required=True,
@@ -81,6 +85,7 @@ def parse_args():
     if args.model == 'mer': setattr(args, 'batch_size', 1)
     return args
 
+
 def main(args=None):
     lecun_fix()
     if args is None:
@@ -88,6 +93,10 @@ def main(args=None):
 
     os.putenv("MKL_SERVICE_FORCE_INTEL", "1")
     os.putenv("NPY_MKL_FORCE_INTEL", "1")
+
+    if args.enable_wandb:
+        wandb.init(project=args.experiment_name, entity="richiben")
+        wandb.config.update(args)
 
     # TODO remove
     if 'effnet_variant' in vars(args) and args.effnet_variant is not None:
@@ -110,7 +119,8 @@ def main(args=None):
     model = get_model(args, backbone, loss, dataset.get_transform())
     if socket.gethostname().startswith('go') or socket.gethostname() == 'jojo':
         import setproctitle
-        setproctitle.setproctitle('{}_{}_{}'.format(args.model, args.buffer_size if 'buffer_size' in args else 0, args.dataset))     
+        setproctitle.setproctitle(
+            '{}_{}_{}'.format(args.model, args.buffer_size if 'buffer_size' in args else 0, args.dataset))
 
     if isinstance(dataset, ContinualDataset):
         train(model, dataset, args)
