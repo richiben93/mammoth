@@ -29,6 +29,7 @@ class DiagonalModel(ContinualModel):
                             help='K of knn to build the graph for laplacian.')
         parser.add_argument('--fmap_dim', type=int, default=20,
                             help='Number of eigenvectors to take to build functional maps.')
+        parser.add_argument('--print_custom_log', action='store_true')
 
         # parser.add_argument('--profiler', action='store_true', help='Log time of function.')
 
@@ -47,7 +48,7 @@ class DiagonalModel(ContinualModel):
         self.task = 0
         self.buffer_evectors = []
         dataset = get_dataset(args)
-        self.not_augmented_transoform = transforms.Compose([dataset.get_normalization_transform()])
+        self.spectral_buffer_not_aug_transf = transforms.Compose([dataset.get_normalization_transform()])
         self.N_TASKS = dataset.N_TASKS
         self.N_CLASSES_PER_TASK = dataset.N_CLASSES_PER_TASK
         self.dataset_name = dataset.NAME
@@ -63,7 +64,6 @@ class DiagonalModel(ContinualModel):
                 self.buffer_evectors.append(evects)
                 c_loss = self.get_off_diagonal_error()
                 self.buffer_evectors.pop()
-
         return c_loss
 
     def end_task(self, dataset):
@@ -80,13 +80,13 @@ class DiagonalModel(ContinualModel):
 
     def compute_buffer_evects(self):
         # add only normalization as transformation
-        inputs, labels = self.spectral_buffer.get_all_data(transform=self.not_augmented_transoform)
+        inputs, labels = self.spectral_buffer.get_all_data(transform=self.spectral_buffer_not_aug_transf)
         latents = self.net.features(inputs)
         energy, eigenvalues, eigenvectors, L, _ = laplacian_analysis(latents, norm_lap=True, knn=self.args.knn_laplace,
                                                                      n_pairs=self.args.fmap_dim)
         return eigenvectors[:, :self.args.fmap_dim]
 
-    def get_off_diagonal_error(self):
+    def get_off_diagonal_error(self, return_c=False):
         # ((evects_tmen1@evects_t * torch.diag(~torch.ones(len(evects_t))))**2).sum()
         evects = self.buffer_evectors
         n_vects = self.args.fmap_dim
@@ -97,6 +97,8 @@ class DiagonalModel(ContinualModel):
         # sns.heatmap(c_0_last.detach().cpu(), cmap='vlag')
         # plt.show()
         oderr = (c_0_last * ~(torch.diag(torch.ones(len(c_0_last))).to(self.device) == 1)).pow(2).sum()
+        if return_c:
+            return oderr, c_0_last
         return oderr
 
 
