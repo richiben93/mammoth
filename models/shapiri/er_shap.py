@@ -3,15 +3,14 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 import os.path
-import pickle
 
 import torch
-from torch.functional import F
 from utils.buffer import Buffer
 from utils.args import *
 from models.utils.continual_model import ContinualModel
 from datasets import get_dataset
 from utils.shapiry import MaskedShapiroShapingGaussianLoss
+import wandb
 
 
 def get_parser() -> ArgumentParser:
@@ -41,10 +40,10 @@ class ErShap(ContinualModel):
         self.classes = get_dataset(args).N_CLASSES_PER_TASK
         self.n_task = get_dataset(args).N_TASKS
         self.shapiro_loss = MaskedShapiroShapingGaussianLoss()
-        # if os.path.isfile('loss_task'):
-        #     os.remove('loss_task')
-        # with open('loss_task', 'w') as obj:
-        #     obj.write(f'task, loss, shapiro_loss\n')
+        if os.path.isfile('loss_task'):
+            os.remove('loss_task')
+        with open('loss_task', 'w') as obj:
+            obj.write(f'task, loss, shapiro_loss\n')
 
     def observe(self, inputs, labels, not_aug_inputs):
         real_batch_size = inputs.shape[0]
@@ -68,6 +67,7 @@ class ErShap(ContinualModel):
             shap_loss = 0
 
         loss = self.loss(masked_outputs, labels % self.classes)
+        wandb.log({'loss': loss, 'shap_loss': shap_loss})
         # with open('loss_task', 'a') as obj:
         #     obj.write(f'{self.task}, {loss}, {shap_loss}\n')
         loss += shap_loss * self.args.shap_weight
@@ -81,15 +81,22 @@ class ErShap(ContinualModel):
 
     def end_task(self, dataset):
         self.task += 1
-        # if self.task == 1:
-        #     with torch.no_grad():
-        #         with open(f'/homes/efrascaroli/output/logits_buffer.pkl', 'wb') as f:
-        #             buf_inputs, buf_labels = self.buffer.get_data(10, transform=self.transform)
-        #             outputs = self.net(buf_inputs)
-        #             pickle.dump((
-        #                 outputs[:, :5].cpu().detach(),
-        #                 outputs[:, 5:10].cpu().detach(),
-        #                 F.softmax(outputs[:, :5], dim=1).cpu().detach(),
-        #                 F.softmax(outputs[:, 5:10], dim=1).cpu().detach(),
-        #                 buf_labels.cpu().detach()
-        #             ), f)
+        status = self.net.training
+        self.net.eval()
+        shapiri_test_total = torch.zeros(self.classes*self.n_task).to(self.device)
+        for k, test_loader in enumerate(dataset.test_loaders):
+            shapiri_test = torch.zeros(self.classes * self.n_task).to(self.device)
+            for n, data in enumerate(test_loader):
+                inputs, labels = data
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                if 'class-il' not in self.COMPATIBILITY:
+                    outputs = self.net(inputs, k)
+                else:
+                    outputs = self.net(inputs)
+                shapiri_test += self.shapiro_loss.shapiro_test(outputs)
+            shapiri_test /= n+1
+            shapiri_test_total += shapiri_test
+        shapiri_test_total /= k+1
+        # wandb.log({f"{num}": shapiri_test_total[num].item() for num in range(shapiri_test_total.shape[0])})
+        # wandb.log({'logits': shapiri_test_total})
+        self.net.train(status)
