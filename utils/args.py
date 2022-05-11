@@ -39,6 +39,8 @@ def add_management_args(parser: ArgumentParser) -> None:
                         help='Enable tensorboard logging')
     parser.add_argument('--wandb', action='store_true',
                         help='Enable wandb logging')
+    parser.add_argument('--custom_log', action='store_true',
+                        help='Enable log (custom for each model, must be implemented)')
     parser.add_argument('--validation', action='store_true',
                         help='Test on the validation set')
 

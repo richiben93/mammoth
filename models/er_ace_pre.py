@@ -15,30 +15,30 @@ def get_parser() -> ArgumentParser:
     add_experiment_args(parser)
     add_rehearsal_args(parser)
     PretrainedConsolidationModel.add_consolidation_args(parser)
+    parser.add_argument('--pre_minibatch', type=int, required=True,
+                        help='Size of pre-dataset minibatch replay.')
     return parser
 
 
-class ErACEConPre(PretrainedConsolidationModel):
-    NAME = 'er_ace_con_pre'
+class ErACEPre(PretrainedConsolidationModel):
+    NAME = 'er_ace_pre'
     COMPATIBILITY = ['class-il', 'domain-il', 'task-il', 'general-continual']
 
     def __init__(self, backbone, loss, args, transform):
-        super(ErACEConPre, self).__init__(backbone, loss, args, transform)
+        args.con_weight = 0
+        super(ErACEPre, self).__init__(backbone, loss, args, transform)
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.seen_so_far = torch.tensor([]).long().to(self.device)
         self.num_classes = self.N_TASKS * self.N_CLASSES_PER_TASK
         if args.wandb:
             wandb.init(project="rodo-pretrain", entity="ema-frasca", config=vars(args),
-                       name=f"EraceConPre-{random_id(5)}")
+                       name=f"EracePre-{random_id(5)}")
         self.log_results = []
 
     def observe(self, inputs, labels, not_aug_inputs):
         wandb_log = {'loss': None, 'class_loss': None, 'con_loss': None, 'task': self.task}
 
         self.opt.zero_grad()
-        con_loss = super().observe(inputs, labels, not_aug_inputs)
-        wandb_log['con_loss'] = con_loss
-
         present = labels.unique()
         self.seen_so_far = torch.cat([self.seen_so_far, present]).unique()
         logits = self.net(inputs)
@@ -54,24 +54,23 @@ class ErACEConPre(PretrainedConsolidationModel):
             # sample from buffer
             buf_inputs, buf_labels = self.buffer.get_data(self.args.minibatch_size, transform=self.transform)
             class_loss += self.loss(self.net(buf_inputs), buf_labels)
+
+        if self.args.pre_minibatch > 0:
+            buf_inputs, buf_labels = self.spectral_buffer.get_data(self.args.pre_minibatch)
+            features = self.net.features(buf_inputs)
+            logits = self.pre_classifier(features)
+            class_loss += self.loss(logits, buf_labels)
         wandb_log['class_loss'] = class_loss.item()
 
         if self.args.buffer_size > 0:
             self.buffer.add_data(examples=not_aug_inputs, labels=labels)
 
         loss = class_loss
-        if con_loss is not None and self.args.con_weight > 0:
-            loss += self.args.con_weight * con_loss
         wandb_log['loss'] = loss
 
-        # t1 = time()
         loss.backward()
-        # t2 = time()
         self.opt.step()
 
-        # bw_time = None
-        # if self.args.profiler:
-        #     bw_time = t2-t1
         if wandb.run:
             wandb.log({'training': wandb_log})
 

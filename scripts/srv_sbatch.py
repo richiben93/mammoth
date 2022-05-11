@@ -24,6 +24,7 @@ red = int(args.cycles)
 with open(args.path) as f:
     sbacci = f.read().splitlines()
 
+# low cuda ram exclude: --exclude=ajeje,germano,helmut,carabbaggio,lurcanio,aimagelab-srv-10,vegeta
 
 if args.one_node:
     sbacci = [f'/homes/{args.user_name}/.conda/envs/{args.envname}/bin/python utils/main.py {x} ;'
