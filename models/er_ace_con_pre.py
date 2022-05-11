@@ -28,8 +28,9 @@ class ErACEConPre(PretrainedConsolidationModel):
         self.seen_so_far = torch.tensor([]).long().to(self.device)
         self.num_classes = self.N_TASKS * self.N_CLASSES_PER_TASK
         if args.wandb:
+            name = 'EraceConPre' if self.args.con_weight > 0 else 'Erace'
             wandb.init(project="rodo-pretrain", entity="ema-frasca", config=vars(args),
-                       name=f"EraceConPre-{random_id(5)}")
+                       name=f"{name}-{random_id(5)}")
         self.log_results = []
 
     def observe(self, inputs, labels, not_aug_inputs):
@@ -48,7 +49,6 @@ class ErACEConPre(PretrainedConsolidationModel):
             mask[:, self.seen_so_far.max():] = 1
         if self.task > 0:
             logits = logits.masked_fill(mask == 0, torch.finfo(logits.dtype).min)
-
         class_loss = self.loss(logits, labels)
         if self.task > 0 and self.args.buffer_size > 0:
             # sample from buffer
