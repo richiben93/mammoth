@@ -12,15 +12,14 @@ from utils.args import *
 from models.utils.continual_model import ContinualModel
 from datasets import get_dataset
 from utils.batch_shaping import BatchShapingLoss
-import math
+from utils.conf import base_path
 import wandb
 
-# wandb.init(project="batch-shaping", entity="ema-frasca", name="er_bs: progressive lr")
-
+bp = base_path()
 
 def get_parser() -> ArgumentParser:
     parser = ArgumentParser(description='Continual learning via'
-                                        ' Experience Replay with BetaShaping and high loss scaling.')
+                                        ' Experience Replay with BetaShaping.')
     add_management_args(parser)
     add_experiment_args(parser)
     add_rehearsal_args(parser)
@@ -33,8 +32,8 @@ def get_parser() -> ArgumentParser:
     return parser
 
 
-class ErBsSLoss(ContinualModel):
-    NAME = 'er_bs_sloss'
+class ErBs(ContinualModel):
+    NAME = 'er_bs'
     COMPATIBILITY = [
         'class-il',
         # 'domain-il',
@@ -43,7 +42,7 @@ class ErBsSLoss(ContinualModel):
     ]
 
     def __init__(self, backbone, loss, args, transform):
-        super(ErBsSLoss, self).__init__(backbone, loss, args, transform)
+        super(ErBs, self).__init__(backbone, loss, args, transform)
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.task = 0
         self.classes = get_dataset(args).N_CLASSES_PER_TASK
@@ -56,7 +55,6 @@ class ErBsSLoss(ContinualModel):
 
     def observe(self, inputs, labels, not_aug_inputs):
         real_batch_size = inputs.shape[0]
-        # labels = labels.long()
 
         self.opt.zero_grad()
         if not self.buffer.is_empty():
@@ -76,20 +74,19 @@ class ErBsSLoss(ContinualModel):
         if self.task+1 < self.n_task and self.args.bs_weight > 0:
             bs_outputs = self.net.linear(features.detach().clone())
             masked_futures = bs_outputs[:, (self.task+1)*self.classes: (self.task+2)*self.classes]
-            bs_loss = self.bs_loss(torch.sigmoid(masked_futures))
+            # bs_loss = self.bs_loss(F.softmax(masked_futures, dim=1))
+            bs_loss = self.bs_loss(F.sigmoid(masked_futures))
+            # bs_loss = (1-F.sigmoid(masked_futures)).pow(2).mean()
         else:
             bs_loss = 0
 
         loss = self.loss(masked_outputs, labels % self.classes)
+        # loss = torch.Tensor([0]).requires_grad_().to(outputs.device)
 
-        if loss.item() > 2:
-            scale_factor = min((loss.item() - 2) * 10, 1)
-            loss /= scale_factor
-
-        # wandb.log({"loss_crossentr": loss})
-        # wandb.log({'loss': loss, 'shap_loss': bs_loss})
-        # with open('loss_task', 'a') as obj:
-        #     obj.write(f'{self.task}, {loss}, {shap_loss}\n')
+        # wandb.log({'futures': outputs[:, 6].cpu().detach().numpy(), 'sigmoid': F.sigmoid(outputs[:, 6]).cpu().detach().numpy()})
+        # wandb.log({'futures': [x.item() for x in outputs[:, 6]], 'sigmoid': [x.item() for x in F.sigmoid(outputs[:, 6])]})
+        # import pandas as pd
+        # pd.DataFrame(F.sigmoid(outputs[:, 6]).cpu().detach().numpy()).T.to_csv('sigmoid.txt', mode='a',  header=False)
         loss += bs_loss * self.args.bs_weight
         loss.backward()
         self.opt.step()
@@ -102,11 +99,11 @@ class ErBsSLoss(ContinualModel):
     def end_task(self, dataset):
         self.task += 1
         # if self.task == 1:
+        #     raise ValueError
         #     with torch.no_grad():
-        #         with open(f'/homes/efrascaroli/output/logits_buffer_pre_bs{self.args.bs_weight}_a{self.args.alpha}_b{self.args.beta}.pkl', 'wb') as f:
-        #         # with open(
-        #         #         f'C:\\Users\\emace\\AImageLab\\SRV-Continual\\tmp\\logits_buffer_pre_bs{self.args.bs_weight}_a{self.args.alpha}_b{self.args.beta}.pkl',
-        #         #         'wb') as f:
+        #         with open(os.path.join(
+        #             bp,
+        #                 f'logits_buffer_bs{self.args.bs_weight}_a{self.args.alpha}_b{self.args.beta}.pkl'), 'wb') as f:
         #             buf_inputs, buf_labels = self.buffer.get_data(self.buffer.buffer_size, transform=self.transform)
         #             outputs = self.net(buf_inputs)
         #             pickle.dump((
