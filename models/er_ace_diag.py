@@ -90,6 +90,11 @@ class ErACEDiag(DiagonalModel):
         dl = DataLoader(ds, self.args.spectral_buffer_size, shuffle=True)
         x, y = next(iter(dl))
         self.spectral_buffer.add_data(x, labels=y)
+        with torch.no_grad():
+            self.eval()
+            evects = self.compute_buffer_evects()
+            self.train()
+        self.buffer_evectors.append(evects)
 
     def begin_task(self, dataset):
         pass
@@ -141,7 +146,7 @@ class ErACEDiag(DiagonalModel):
                 self.eval()
                 evects = self.compute_buffer_evects()
                 self.train()
-            self.buffer_evectors = [evects]
+            self.buffer_evectors.append(evects)
         else:
             super().end_task(dataset)
 
@@ -164,6 +169,7 @@ class ErACEDiag(DiagonalModel):
             return acc
 
     def pm_train(self, pm_dataset_train, n_epochs=1):
+        self.net.eval()
         self.new_classifier = nn.Linear(512, 100).to(self.device)
         train_loader = DataLoader(pm_dataset_train,
                                   batch_size=self.args.batch_size)
@@ -180,6 +186,7 @@ class ErACEDiag(DiagonalModel):
                 loss = self.loss(out, labels)
                 loss.backward()
                 opt.step()
+        self.net.train()
 
     @torch.no_grad()
     def pm_eval(self, pm_dataset_test):
@@ -187,6 +194,7 @@ class ErACEDiag(DiagonalModel):
         test_loader = DataLoader(pm_dataset_test,
                                  batch_size=self.args.batch_size, shuffle=False)
         self.net.eval()
+        self.new_classifier.eval()
         correct, total = 0.0, 0.0
         for i, data in enumerate(test_loader):
             inputs, labels = data
@@ -200,6 +208,7 @@ class ErACEDiag(DiagonalModel):
         print(correct / total * 100)
 
         self.net.train()
+        self.new_classifier.train()
         return correct / total * 100
 
     def log_accs(self, accs):
@@ -212,7 +221,7 @@ class ErACEDiag(DiagonalModel):
         # running consolidation error
         diag_error = None
         c_0 = None
-        if self.task > 1:
+        if self.task > 0:
             with torch.no_grad():
                 diag_error, c_0 = self.get_off_diagonal_error(return_c=True)
                 diag_error = diag_error.item()

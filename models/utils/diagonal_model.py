@@ -30,6 +30,7 @@ class DiagonalModel(ContinualModel):
         parser.add_argument('--fmap_dim', type=int, default=20,
                             help='Number of eigenvectors to take to build functional maps.')
         parser.add_argument('--print_custom_log', action='store_true')
+        parser.add_argument('--set_device', default=None)
 
         # parser.add_argument('--profiler', action='store_true', help='Log time of function.')
 
@@ -44,6 +45,7 @@ class DiagonalModel(ContinualModel):
 
     def __init__(self, backbone, loss, args, transform):
         super().__init__(backbone, loss, args, transform)
+        self.device = torch.device(f"cuda:{self.args.set_device}") if self.args.set_device is not None else get_device()
         self.spectral_buffer = Buffer(args.spectral_buffer_size, self.device)
         self.task = 0
         self.buffer_evectors = []
@@ -58,12 +60,13 @@ class DiagonalModel(ContinualModel):
 
     def observe(self, inputs, labels, not_aug_inputs):
         c_loss = None
-        if self.task > 0 and self.args.diag_weight > 0:
-            with bn_untrack_stats(self.net):
-                evects = self.compute_buffer_evects()
-                self.buffer_evectors.append(evects)
-                c_loss = self.get_off_diagonal_error()
-                self.buffer_evectors.pop()
+        if self.task > 0 or self.args.pretrained_model is not None:
+            if self.args.diag_weight > 0:
+                with bn_untrack_stats(self.net):
+                    evects = self.compute_buffer_evects()
+                    self.buffer_evectors.append(evects)
+                    c_loss = self.get_off_diagonal_error()
+                    self.buffer_evectors.pop()
         return c_loss
 
     def end_task(self, dataset):
@@ -76,7 +79,7 @@ class DiagonalModel(ContinualModel):
             self.eval()
             evects = self.compute_buffer_evects()
             self.train()
-        self.buffer_evectors = [evects]
+        self.buffer_evectors.append(evects)
 
     def compute_buffer_evects(self):
         # add only normalization as transformation
@@ -96,57 +99,59 @@ class DiagonalModel(ContinualModel):
         # plt.close()
         # sns.heatmap(c_0_last.detach().cpu(), cmap='vlag')
         # plt.show()
-        oderr = (c_0_last * ~(torch.diag(torch.ones(len(c_0_last))).to(self.device) == 1)).pow(2).sum()
+        # oderr v1
+        # oderr = (c_0_last * ~(torch.diag(torch.ones(len(c_0_last))).to(self.device) == 1)).pow(2).sum()
+        # oderr v2
+        oderr = n_vects-(c_0_last * (torch.diag(torch.ones(len(c_0_last))).to(self.device) == 1)).pow(2).sum()
         if return_c:
             return oderr, c_0_last
         return oderr
 
-
 ## old consolidation error with plt
-    #
-    # def get_consolidation_error(self):
-    #     import matplotlib.pyplot as plt
-    #     import seaborn as sns
-    #     evects = self.buffer_evectors
-    #     n_vects = self.args.fmap_dim
-    #
-    #     ncols = len(evects) - 1
-    #     figsize = (6*ncols, 6)
-    #     fig, ax = plt.subplots(1, ncols, figsize=figsize)
-    #     plt.suptitle(f'\nKnn Norm Laplacian | {n_vects} eigenvects | {len(evects[0])} data')
-    #     mask = torch.eye(n_vects) == 0
-    #     c_0_last = evects[0][:, :n_vects].T @ evects[len(evects) - 1][:, :n_vects]
-    #     c_product = torch.ones((n_vects, n_vects), device=self.device, dtype=torch.double)
-    #     for i, ev in enumerate(evects[:-1]):
-    #         c = ev[:, :n_vects].T @ evects[i + 1][:, :n_vects]
-    #         if i == 0:
-    #             c_product = c.clone()
-    #         else:
-    #             c_product = c_product @ c
-    #         oode = torch.square(c[mask]).sum().item()
-    #         sns.heatmap(c.detach().cpu(), cmap='bwr', vmin=-1, vmax=1, ax=ax[i], cbar=True if i + 1 == ncols else False)
-    #         ax[i].set_title(f'FMap Task {i} => {i + 1} | oode={oode:.4f}')
-    #
-    #     if details: plt.show()
-    #     else: plt.close()
-    #
-    #     figsize = (6 * 3, 8)
-    #     fig, ax = plt.subplots(1, 3, figsize=figsize)
-    #     plt.suptitle(f'\nCompare differences of 0->Last and consecutive product')
-    #
-    #     oode = torch.square(c_0_last[mask]).sum().item()
-    #     sns.heatmap(c_0_last.detach().cpu(), cmap='bwr', vmin=-1, vmax=1, ax=ax[0], cbar=False)
-    #     ax[0].set_title(f'FMap Task 0 => {len(evects) - 1}\n oode={oode:.4f}')
-    #     oode = torch.square(c_product[mask]).sum().item()
-    #     sns.heatmap(c_product.detach().cpu(), cmap='bwr', vmin=-1, vmax=1, ax=ax[1], cbar=False)
-    #     ax[1].set_title(f'FMap Diagonal Product\n oode={oode:.4f}')
-    #     diff = (c_0_last - c_product).abs()
-    #     sns.heatmap(diff.detach().cpu(), cmap='bwr', vmin=-1, vmax=1, ax=ax[2], cbar=True)
-    #     ax[2].set_title(f'Absolute Differences | sum: {diff.sum().item():.4f}')
-    #     if details: plt.show()
-    #     else: plt.close()
-    #
-    #     # if self.args.wandb:
-    #     #     wandb.log({"fmap": wandb.Image(diff.cpu().detach().numpy())})
-    #
-    #     return diff.sum()
+#
+# def get_consolidation_error(self):
+#     import matplotlib.pyplot as plt
+#     import seaborn as sns
+#     evects = self.buffer_evectors
+#     n_vects = self.args.fmap_dim
+#
+#     ncols = len(evects) - 1
+#     figsize = (6*ncols, 6)
+#     fig, ax = plt.subplots(1, ncols, figsize=figsize)
+#     plt.suptitle(f'\nKnn Norm Laplacian | {n_vects} eigenvects | {len(evects[0])} data')
+#     mask = torch.eye(n_vects) == 0
+#     c_0_last = evects[0][:, :n_vects].T @ evects[len(evects) - 1][:, :n_vects]
+#     c_product = torch.ones((n_vects, n_vects), device=self.device, dtype=torch.double)
+#     for i, ev in enumerate(evects[:-1]):
+#         c = ev[:, :n_vects].T @ evects[i + 1][:, :n_vects]
+#         if i == 0:
+#             c_product = c.clone()
+#         else:
+#             c_product = c_product @ c
+#         oode = torch.square(c[mask]).sum().item()
+#         sns.heatmap(c.detach().cpu(), cmap='bwr', vmin=-1, vmax=1, ax=ax[i], cbar=True if i + 1 == ncols else False)
+#         ax[i].set_title(f'FMap Task {i} => {i + 1} | oode={oode:.4f}')
+#
+#     if details: plt.show()
+#     else: plt.close()
+#
+#     figsize = (6 * 3, 8)
+#     fig, ax = plt.subplots(1, 3, figsize=figsize)
+#     plt.suptitle(f'\nCompare differences of 0->Last and consecutive product')
+#
+#     oode = torch.square(c_0_last[mask]).sum().item()
+#     sns.heatmap(c_0_last.detach().cpu(), cmap='bwr', vmin=-1, vmax=1, ax=ax[0], cbar=False)
+#     ax[0].set_title(f'FMap Task 0 => {len(evects) - 1}\n oode={oode:.4f}')
+#     oode = torch.square(c_product[mask]).sum().item()
+#     sns.heatmap(c_product.detach().cpu(), cmap='bwr', vmin=-1, vmax=1, ax=ax[1], cbar=False)
+#     ax[1].set_title(f'FMap Diagonal Product\n oode={oode:.4f}')
+#     diff = (c_0_last - c_product).abs()
+#     sns.heatmap(diff.detach().cpu(), cmap='bwr', vmin=-1, vmax=1, ax=ax[2], cbar=True)
+#     ax[2].set_title(f'Absolute Differences | sum: {diff.sum().item():.4f}')
+#     if details: plt.show()
+#     else: plt.close()
+#
+#     # if self.args.wandb:
+#     #     wandb.log({"fmap": wandb.Image(diff.cpu().detach().numpy())})
+#
+#     return diff.sum()
