@@ -91,9 +91,9 @@ class ErACEDiag(DiagonalModel):
         x, y = next(iter(dl))
         self.spectral_buffer.add_data(x, labels=y)
         with torch.no_grad():
-            self.eval()
+            self.net.eval()
             evects = self.compute_buffer_evects()
-            self.train()
+            self.net.train()
         self.buffer_evectors.append(evects)
 
     def begin_task(self, dataset):
@@ -141,12 +141,21 @@ class ErACEDiag(DiagonalModel):
 
     def end_task(self, dataset):
         if self.args.pretrained_model is not None:
+            model = copy.deepcopy(self.net)
+            for _ in range(30):
+                _ = self.compute_buffer_evects(model)
             self.task += 1
             with torch.no_grad():
-                self.eval()
-                evects = self.compute_buffer_evects()
-                self.train()
+                model.eval()
+                evects = self.compute_buffer_evects(model)
+                model.train()
             self.buffer_evectors.append(evects)
+            # self.task += 1
+            # with torch.no_grad():
+            #     self.net.eval()
+            #     evects = self.compute_buffer_evects()
+            #     self.net.train()
+            # self.buffer_evectors.append(evects)
         else:
             super().end_task(dataset)
 

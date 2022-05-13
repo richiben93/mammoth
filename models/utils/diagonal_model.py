@@ -1,5 +1,7 @@
+import copy
 from copy import deepcopy
 
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import wandb
@@ -25,6 +27,8 @@ class DiagonalModel(ContinualModel):
                             help='Size of the spectral buffer.')
         parser.add_argument('--diag_weight', type=float, required=True,
                             help='Weight of consolidation.')
+        parser.add_argument('--diag_losses', default=['d-err', 'od-err'],
+                            nargs="+", help='Diagonal losses.')
         parser.add_argument('--knn_laplace', type=int, default=10,
                             help='K of knn to build the graph for laplacian.')
         parser.add_argument('--fmap_dim', type=int, default=20,
@@ -66,46 +70,52 @@ class DiagonalModel(ContinualModel):
                     evects = self.compute_buffer_evects()
                     self.buffer_evectors.append(evects)
                     c_loss = self.get_off_diagonal_error()
-                    self.buffer_evectors.pop()
+                self.buffer_evectors.pop()
         return c_loss
 
     def end_task(self, dataset):
         self.spectral_buffer = deepcopy(self.buffer)
         # if wandb.run:
         #     wandb.log({'spectral_buffer': self.spectral_buffer.get_all_data()[1]})
-
-        self.task += 1
         with torch.no_grad():
-            self.eval()
+            self.net.eval()
             evects = self.compute_buffer_evects()
-            self.train()
+            self.net.train()
         self.buffer_evectors.append(evects)
 
-    def compute_buffer_evects(self):
+    def compute_buffer_evects(self, model=None):
         # add only normalization as transformation
         inputs, labels = self.spectral_buffer.get_all_data(transform=self.spectral_buffer_not_aug_transf)
-        latents = self.net.features(inputs)
+        latents = self.net.features(inputs) if model is None else model.features(inputs)
         energy, eigenvalues, eigenvectors, L, _ = laplacian_analysis(latents, norm_lap=True, knn=self.args.knn_laplace,
                                                                      n_pairs=self.args.fmap_dim)
         return eigenvectors[:, :self.args.fmap_dim]
 
     def get_off_diagonal_error(self, return_c=False):
-        # ((evects_tmen1@evects_t * torch.diag(~torch.ones(len(evects_t))))**2).sum()
+        oderr = 0
+        derr = 0
+        iderr = 0
         evects = self.buffer_evectors
         n_vects = self.args.fmap_dim
         c_0_last = evects[0][:, :n_vects].T @ evects[len(evects) - 1][:, :n_vects]
-        # import seaborn as sns
+        # off diagonal error
+        if 'od-err' in self.args.diag_losses:
+            oderr = (c_0_last * ~(torch.eye(c_0_last.shape[0]).to(self.device) == 1)).pow(2).sum()
+        # diagonal error
+        if 'd-err' in self.args.diag_losses:
+            derr = n_vects-(c_0_last * (torch.eye(c_0_last.shape[0]).to(self.device) == 1)).pow(2).sum()
+        # identity error
+        if 'id-err' in self.args.diag_losses:
+            iderr = (torch.eye(c_0_last.shape[0]).to(self.device) - c_0_last).pow(2).sum()
         # import matplotlib.pyplot as plt
-        # plt.close()
-        # sns.heatmap(c_0_last.detach().cpu(), cmap='vlag')
+        # plt.imshow(c_0_last.detach().cpu())
+        # plt.title(oderr)
+        # plt.colorbar()
         # plt.show()
-        # oderr v1
-        # oderr = (c_0_last * ~(torch.diag(torch.ones(len(c_0_last))).to(self.device) == 1)).pow(2).sum()
-        # oderr v2
-        oderr = n_vects-(c_0_last * (torch.diag(torch.ones(len(c_0_last))).to(self.device) == 1)).pow(2).sum()
+        loss = oderr+derr+iderr
         if return_c:
-            return oderr, c_0_last
-        return oderr
+            return loss, c_0_last
+        return loss
 
 ## old consolidation error with plt
 #
