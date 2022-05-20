@@ -3,6 +3,7 @@ import os
 from urllib import request
 
 import torch
+from matplotlib import pyplot as plt
 from torch import nn
 from torch.optim import SGD
 from torch.utils.data import DataLoader
@@ -12,7 +13,7 @@ from tqdm import tqdm
 
 from backbone.ResNet18 import resnet18
 from datasets import get_dataset
-from datasets.seq_cifar100 import TCIFAR100, SequentialCIFAR100_20x5
+from datasets.seq_cifar100 import TCIFAR100, SequentialCIFAR100_10x10, MyCIFAR100
 from utils.buffer import Buffer
 from utils.args import *
 from models.utils.diagonal_model import DiagonalModel
@@ -49,6 +50,8 @@ def get_parser() -> ArgumentParser:
     add_experiment_args(parser)
     add_rehearsal_args(parser)
     DiagonalModel.add_consolidation_args(parser)
+    parser.add_argument('--use_pm_dataset_buffer', action='store_true',
+                        help='Use the pretrained model buffer instead the dataset buffer ones for rehearsal.')
     return parser
 
 
@@ -81,10 +84,12 @@ class ErACEDiag(DiagonalModel):
 
     def load_buffer(self):
         if self.args.pretrained_model == 'cifar100':
-            # todo: metto augmented o no?
             ds = CIFAR100(base_path() + 'CIFAR100'
-                          , transform=SequentialCIFAR100_20x5.TRANSFORM, download=True)
-            self.spectral_buffer_not_aug_transf = None
+                          , transform=transforms.Compose([transforms.ToTensor()]),
+                          download=True)
+            self.spectral_buffer_transform = SequentialCIFAR100_10x10.TRANSFORM
+            self.spectral_buffer_not_aug_transf = transforms.Compose(
+                [SequentialCIFAR100_10x10.get_normalization_transform()])
         else:
             raise ValueError
         dl = DataLoader(ds, self.args.spectral_buffer_size, shuffle=True)
@@ -119,8 +124,17 @@ class ErACEDiag(DiagonalModel):
         class_loss = self.loss(logits, labels)
         if self.task > 0:
             # sample from buffer
-            buf_inputs, buf_labels = self.buffer.get_data(self.args.minibatch_size, transform=self.transform)
-            class_loss += self.loss(self.net(buf_inputs), buf_labels)
+            buf_inputs, buf_labels = self.buffer.get_data(self.args.minibatch_size,
+                                                          transform=self.transform)
+            buf_outs = self.net(buf_inputs)
+            class_loss += self.loss(buf_outs, buf_labels)
+
+        if self.args.use_pm_dataset_buffer:
+            buf_spect_inputs, buf_spect_labels = self.spectral_buffer.get_data(self.args.minibatch_size,
+                                                                               transform=self.transform)
+            buf_spect_outs = self.new_classifier(self.net.features(buf_spect_inputs))
+            class_loss += self.loss(buf_spect_outs, buf_spect_labels)
+
         wandb_log['class_loss'] = class_loss.item()
 
         if self.args.buffer_size > 0:
@@ -140,8 +154,10 @@ class ErACEDiag(DiagonalModel):
         return loss.item()
 
     def end_task(self, dataset):
+        # if using pretrained_model
         if self.args.pretrained_model is not None:
             model = copy.deepcopy(self.net)
+            # cycling avoiding problems related to batch_norm
             for _ in range(30):
                 _ = self.compute_buffer_evects(model)
             self.task += 1
@@ -150,12 +166,6 @@ class ErACEDiag(DiagonalModel):
                 evects = self.compute_buffer_evects(model)
                 model.train()
             self.buffer_evectors.append(evects)
-            # self.task += 1
-            # with torch.no_grad():
-            #     self.net.eval()
-            #     evects = self.compute_buffer_evects()
-            #     self.net.train()
-            # self.buffer_evectors.append(evects)
         else:
             super().end_task(dataset)
 
@@ -163,11 +173,11 @@ class ErACEDiag(DiagonalModel):
         if self.args.pretrained_model == 'cifar100':
             # freeze parameters that are not in the classifier
             pm_dataset_train = TCIFAR100(base_path() + 'CIFAR100', train=True,
-                                         download=True, transform=SequentialCIFAR100_20x5.TRANSFORM)
+                                         download=True, transform=SequentialCIFAR100_10x10.TRANSFORM)
             pm_dataset_test = TCIFAR100(base_path() + 'CIFAR100', train=False,
                                         download=True,
                                         transform=transforms.Compose([transforms.ToTensor(),
-                                                                      SequentialCIFAR100_20x5.get_normalization_transform()]))
+                                                                      SequentialCIFAR100_10x10.get_normalization_transform()]))
             acc = self.pm_eval(pm_dataset_test)
             if n_epochs > 0:
                 self.pm_train(pm_dataset_train, n_epochs)
@@ -241,12 +251,17 @@ class ErACEDiag(DiagonalModel):
         if wandb.run:
             log.update({**{f'Class-IL task-{i + 1}': acc for i, acc in enumerate(accs[0])},
                         **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])}})
-            # wandb.log({"chart": plt})
-            # log.update({})
+            fig, ax = plt.subplots(1, 2, sharey=True)
+            ax[0].imshow(c_0.cpu() * torch.eye(c_0.shape[0]), cmap='bwr', vmin=-1, vmax=1)
+            ax[0].set_title(f'diag_err: {(c_0.cpu() * torch.eye(c_0.shape[0])).pow(2).sum().item() : .3f}')
+            ax[1].imshow(c_0.cpu() * (torch.eye(c_0.shape[0]) == 0), cmap='bwr', vmin=-1, vmax=1)
+            ax[1].set_title(f'off_diag_err: {(c_0.cpu() * (torch.eye(c_0.shape[0]) == 0)).pow(2).sum().item() : .3f}')
+            fig.suptitle(f'Task {self.task}')
+            log.update({"Spectral Buffer functional map": plt})
             wandb.log(log)
+
         log.update({'c0': c_0.tolist() if c_0 is not None else c_0, 'task': self.task})
         self.log_results.append(log)
-        #     exit()
 
         if self.task == self.N_TASKS:
             self.end_training()
@@ -261,4 +276,3 @@ class ErACEDiag(DiagonalModel):
         # if print_latents:
         #     logs_dir = f'/nas/softechict-nas-2/efrascaroli/mammoth-data/logs/{self.dataset_name}/{self.NAME}'
         #     self.print_logs(logs_dir, self.custom_log, name='latents')
-
