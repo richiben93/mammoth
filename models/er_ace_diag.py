@@ -1,6 +1,5 @@
 import copy
 import os
-from urllib import request
 
 import torch
 from matplotlib import pyplot as plt
@@ -10,6 +9,8 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR100
 from torchvision.transforms import transforms
 from tqdm import tqdm
+
+from models.utils.pretrain_model import return_pretrained_model
 
 from backbone.ResNet18 import resnet18
 from datasets import get_dataset
@@ -22,25 +23,6 @@ import numpy as np
 from time import time
 
 from utils.conf import base_path
-
-
-def download_model(dataset_type: str):
-    if dataset_type == "cifar100":
-        link = "https://unimore365-my.sharepoint.com/:u:/g/personal/215580_unimore_it/Eb4BgDZ5g_1Imuwz_PJAmdgBc8k9I_P5p0Y-A97edhsxIw?e=WmlZZc"
-        file = "rs18_cifar100.pth"
-        n_classes = 100
-    elif dataset_type == "tinyimgR":
-        link = "https://unimore365-my.sharepoint.com/:u:/g/personal/215580_unimore_it/EeWEOSls505AsMCTXAxWoLUBmeIjCiplFl40zDOCmB_lEw?download=1"
-        file = "erace_pret_on_tinyr.pth"
-        n_classes = 200
-    else:
-        raise ValueError
-    local_path = os.path.join(base_path(), 'checkpoints')
-    if not os.path.isdir(local_path):
-        os.mkdir(local_path)
-    if not os.path.isfile(os.path.join(local_path, file)):
-        request.urlretrieve(link, os.path.join(local_path, file))
-    return os.path.join(local_path, file), n_classes
 
 
 def get_parser() -> ArgumentParser:
@@ -68,16 +50,16 @@ class ErACEDiag(DiagonalModel):
             wandb.init(project=self.args.experiment_name, entity="richiben", config=vars(args))
         self.log_results = []
         if self.args.pretrained_model is not None:
-            local_path, n_classes = download_model(self.args.pretrained_model)
-            real_net = resnet18(n_classes)
-            state_dict = torch.load(local_path)
-            real_net.load_state_dict(state_dict)
-            real_net.to(self.device)
+            # initialize pretrained model
+            real_net = return_pretrained_model(self.args.pretrained_model).to(self.device)
+            # save start classifier
             start_classifier = self.net.classifier
+            # replace net with pretrained model
             self.net = copy.deepcopy(real_net)
+            # initialize new classifier as pretrained model classifier
             self.new_classifier = real_net.classifier
+            # replace pretrained model classifier with start classifier
             self.net.classifier = start_classifier
-
             self.load_buffer()
             self.opt = SGD(self.net.parameters(), lr=self.args.lr)
             self.pm_task(n_epochs=0)
@@ -94,12 +76,16 @@ class ErACEDiag(DiagonalModel):
             raise ValueError
         dl = DataLoader(ds, self.args.spectral_buffer_size, shuffle=True)
         x, y = next(iter(dl))
+        # masking
+        # mask = torch.where(y <= 10)[0]
+        # self.spectral_buffer.add_data(x[mask], labels=y[mask])
         self.spectral_buffer.add_data(x, labels=y)
         with torch.no_grad():
             self.net.eval()
-            evects = self.compute_buffer_evects()
+            evects, evalues = self.compute_buffer_evects()
             self.net.train()
         self.buffer_evectors.append(evects)
+        self.buffer_evalues.append(evalues)
 
     def begin_task(self, dataset):
         pass
@@ -146,6 +132,7 @@ class ErACEDiag(DiagonalModel):
         wandb_log['loss'] = loss
 
         loss.backward()
+        nn.utils.clip_grad_value_(self.net.parameters(), 0.1)
         self.opt.step()
 
         if wandb.run:
@@ -163,9 +150,10 @@ class ErACEDiag(DiagonalModel):
             self.task += 1
             with torch.no_grad():
                 model.eval()
-                evects = self.compute_buffer_evects(model)
+                evects, evalues = self.compute_buffer_evects(model)
                 model.train()
             self.buffer_evectors.append(evects)
+            self.buffer_evalues.append(evalues)
         else:
             super().end_task(dataset)
 
@@ -236,7 +224,10 @@ class ErACEDiag(DiagonalModel):
         if self.args.pretrained_model is not None:
             pm_acc = self.pm_task(1)
             log.update({'Pretrained Model-acc': pm_acc})
+        from torch.utils.data import TensorDataset
 
+        sp_ds = TensorDataset(*self.spectral_buffer.get_all_data(self.spectral_buffer_not_aug_transf))
+        self.pm_eval(sp_ds)
         # running consolidation error
         diag_error = None
         c_0 = None
