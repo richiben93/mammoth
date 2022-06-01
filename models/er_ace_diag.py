@@ -11,7 +11,7 @@ from torchvision.transforms import transforms
 from tqdm import tqdm
 
 from models.utils.pretrain_model import return_pretrained_model
-
+from torch.utils.data import TensorDataset
 from backbone.ResNet18 import resnet18
 from datasets import get_dataset
 from datasets.seq_cifar100 import TCIFAR100, SequentialCIFAR100_10x10, MyCIFAR100
@@ -49,6 +49,7 @@ class ErACEDiag(DiagonalModel):
         if args.wandb:
             wandb.init(project=self.args.experiment_name, entity="richiben", config=vars(args))
         self.log_results = []
+        self.log_results_spectral = []
         if self.args.pretrained_model is not None:
             # initialize pretrained model
             real_net = return_pretrained_model(self.args.pretrained_model).to(self.device)
@@ -224,10 +225,12 @@ class ErACEDiag(DiagonalModel):
         if self.args.pretrained_model is not None:
             pm_acc = self.pm_task(1)
             log.update({'Pretrained Model-acc': pm_acc})
-        from torch.utils.data import TensorDataset
-
-        sp_ds = TensorDataset(*self.spectral_buffer.get_all_data(self.spectral_buffer_not_aug_transf))
-        self.pm_eval(sp_ds)
+        self.net.eval()
+        x_buf, y_buf = self.spectral_buffer.get_all_data(self.spectral_buffer_not_aug_transf)
+        feat_buf = self.net.features(x_buf)
+        self.net.train()
+        # sp_ds = TensorDataset(*self.spectral_buffer.get_all_data(self.spectral_buffer_not_aug_transf))
+        # self.pm_eval(sp_ds)
         # running consolidation error
         diag_error = None
         c_0 = None
@@ -253,15 +256,16 @@ class ErACEDiag(DiagonalModel):
 
         log.update({'c0': c_0.tolist() if c_0 is not None else c_0, 'task': self.task})
         self.log_results.append(log)
-
-        if self.task == self.N_TASKS:
+        self.log_results_spectral.append({'feat_buf': feat_buf.tolist(), 'y_buf': y_buf.tolist()})
+        if self.task == 2:
             self.end_training()
 
     def end_training(self, print_latents=False):
         if self.args.print_custom_log:
             log_dir = os.path.join(base_path(), f'logs/{self.dataset_name}/{self.NAME}')
-            obj = {**vars(self.args), 'results': self.log_results}
-            self.print_logs(log_dir, obj, name='results')
+            obj = {**vars(self.args), 'results': self.log_results_spectral}
+            self.print_logs(log_dir, obj, name='spectral_features')
+            exit()
         else:
             ...
         # if print_latents:

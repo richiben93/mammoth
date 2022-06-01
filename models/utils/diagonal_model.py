@@ -105,7 +105,7 @@ class DiagonalModel(ContinualModel):
         # eigenvalues error
         if 'e-err' in self.args.diag_losses:
             evalues = self.buffer_evalues
-            e_err = (evalues[0] - evalues[len(evalues) - 1]).pow(2).sum()
+            e_err = ((evalues[0][1:] - evalues[len(evalues) - 1][1:]).pow(2)/(evalues[0][1:]+1e-3).pow(2)).sum()
             loss += e_err
 
         if return_c:
