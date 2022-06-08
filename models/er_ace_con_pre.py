@@ -2,10 +2,11 @@ import torch
 from utils.buffer import Buffer
 from utils.args import *
 from models.utils.consolidation_pretrain import PretrainedConsolidationModel
-import wandb
 import numpy as np
 from time import time
-from utils import random_id
+from utils.conf import base_path
+from utils.wandbsc import WandbLogger
+import os
 
 
 def get_parser() -> ArgumentParser:
@@ -27,11 +28,11 @@ class ErACEConPre(PretrainedConsolidationModel):
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.seen_so_far = torch.tensor([]).long().to(self.device)
         self.num_classes = self.N_TASKS * self.N_CLASSES_PER_TASK
-        if args.wandb:
-            name = 'EraceConPre' if self.args.con_weight > 0 else 'Erace'
-            wandb.init(project="rodo-pretrain", entity="ema-frasca", config=vars(args),
-                       name=f"{name}-{random_id(5)}")
+        self.args.name = 'EraceConPre' if self.args.con_weight > 0 else 'Erace'
+        self.wblog = WandbLogger(args, name=self.args.name)
         self.log_results = []
+        self.log_latents = []
+        self.add_log_latents()
 
     def observe(self, inputs, labels, not_aug_inputs):
         wandb_log = {'loss': None, 'class_loss': None, 'con_loss': None, 'task': self.task}
@@ -72,18 +73,16 @@ class ErACEConPre(PretrainedConsolidationModel):
         # bw_time = None
         # if self.args.profiler:
         #     bw_time = t2-t1
-        if wandb.run:
-            wandb.log({'training': wandb_log})
-
+        self.wblog({'training': wandb_log})
         return loss.item()
 
     def log_accs(self, accs):
         cil_acc, til_acc = np.mean(accs, axis=1).tolist()
-        pre_acc = self.pre_dataset_train_head(n_epochs=1)
+        pre_acc = self.pre_dataset_train_head()
 
         # running consolidation error
         con_error = None
-        if self.task > 1:
+        if self.task > 0:
             with torch.no_grad():
                 con_error = self.get_consolidation_error().item()
                 # print(f'con err: {con_error}')
@@ -96,17 +95,33 @@ class ErACEConPre(PretrainedConsolidationModel):
             'task': self.task,
         }
         self.log_results.append(log_obj)
-        if wandb.run:
-            wandb.log({'testing': log_obj})
+        self.wblog({'testing': log_obj})
+        self.add_log_latents()
+        self.save_checkpoint(self.task)
 
-        if self.task > 1:
-            pass
+        if self.task > 2:
+            self.end_training()
+            exit()
 
         if self.task == self.N_TASKS:
             self.end_training()
 
+    @torch.no_grad()
+    def add_log_latents(self):
+        lats, y = self.compute_buffer_latents()
+        self.log_latents.append({'feat_buf': lats.tolist(), 'y_buf': y.tolist()})
+
+    def save_checkpoint(self, task: int):
+        if self.args.custom_log:
+            log_dir = f'{base_path()}checkpoints/{self.args.name}'
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+            torch.save(self.net.state_dict(), f'{log_dir}/task_{task}.pt')
+
     def end_training(self):
         if self.args.custom_log:
-            log_dir = f'/nas/softechict-nas-2/efrascaroli/mammoth-data/logs/{self.dataset_name}/{self.NAME}'
-            obj = {**vars(self.args), 'results': self.log_results}
-            self.print_logs(log_dir, obj, name='results')
+            log_dir = f'{base_path()}logs/{self.dataset_name}/{self.NAME}'
+            # obj = {**vars(self.args), 'results': self.log_results}
+            # self.print_logs(log_dir, obj, name='results')
+            obj = {**vars(self.args), 'results': self.log_results, 'latents': self.log_latents}
+            # self.print_logs(log_dir, obj, name='latents')

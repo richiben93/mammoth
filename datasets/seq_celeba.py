@@ -12,7 +12,7 @@ from torchvision.datasets import CelebA
 import torchvision.transforms as transforms
 from backbone.ResNet18 import resnet18
 import torch.nn.functional as F
-from utils.conf import base_path
+from utils.conf import base_path_dataset
 from PIL import Image
 from datasets.utils.validation import get_train_val
 from datasets.utils.continual_dataset import ContinualDataset, store_masked_loaders
@@ -146,14 +146,14 @@ class SequentialCelebA(ContinualDataset):
         test_transform = transforms.Compose(
             [transforms.ToTensor(), self.get_normalization_transform()])
 
-        train_dataset = MyCelebA(base_path(), split='train', download=True, transform=transform,
+        train_dataset = MyCelebA(base_path_dataset(), split='train', download=True, transform=transform,
                                  target_idxes=self.TARGET_IDXES, target_names=self.TARGET_NAMES,
                                  delete_bad_attr=True, take_only_unique=True)
         if self.args.validation:
             train_dataset, test_dataset = get_train_val(train_dataset,
                                                         test_transform, self.NAME)
         else:
-            test_dataset = MyCelebATest(base_path(), split='test', download=True, transform=transform,
+            test_dataset = MyCelebATest(base_path_dataset(), split='test', download=True, transform=transform,
                                         target_idxes=self.TARGET_IDXES, target_names=self.TARGET_NAMES,
                                         delete_bad_attr=True, take_only_unique=True)
 
@@ -163,7 +163,7 @@ class SequentialCelebA(ContinualDataset):
     def not_aug_dataloader(self, batch_size):
         transform = transforms.Compose([transforms.ToTensor(), self.get_normalization_transform()])
 
-        train_dataset = MyCelebA(base_path(), split='train', download=True, transform=transform,
+        train_dataset = MyCelebA(base_path_dataset(), split='train', download=True, transform=transform,
                                  target_idxes=self.TARGET_IDXES)
         train_loader = get_previous_train_loader(train_dataset, batch_size, self)
 

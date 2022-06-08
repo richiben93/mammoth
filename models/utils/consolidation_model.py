@@ -12,6 +12,7 @@ from utils.buffer import Buffer
 from utils.spectral_analysis import laplacian_analysis
 from time import time
 from datasets import get_dataset
+import os
 
 
 class ConsolidationModel(ContinualModel):
@@ -31,7 +32,6 @@ class ConsolidationModel(ContinualModel):
 
     @staticmethod
     def print_logs(path: str, obj: any, name='logs', extension='pyd'):
-        import os
         if not os.path.exists(path):
             os.makedirs(path)
         filename = f'{name}.{extension}'
@@ -56,7 +56,7 @@ class ConsolidationModel(ContinualModel):
             self.spectral_buffer.add_data(examples=inputs, labels=labels)
 
         c_loss = None
-        if self.task > 0 and self.args.con_weight > 0:
+        if len(self.buffer_evectors) > 0 and self.args.con_weight > 0:
             with bn_untrack_stats(self.net):
                 # t1 = time()
                 evects = self.compute_buffer_evects()

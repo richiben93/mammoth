@@ -8,7 +8,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from backbone.ResNet18 import resnet18
 import torch.nn.functional as F
-from utils.conf import base_path
+from utils.conf import base_path_dataset
 from PIL import Image
 import os
 from datasets.utils.validation import get_train_val
@@ -138,13 +138,13 @@ class SequentialTinyImagenet(ContinualDataset):
         test_transform = self.TEST_TRANSFORM if hasattr(self, 'TEST_TRANSFORM') else transforms.Compose(
             [transforms.ToTensor(), self.get_normalization_transform()])
 
-        train_dataset = MyTinyImagenet(base_path() + 'TINYIMG',
+        train_dataset = MyTinyImagenet(base_path_dataset() + 'TINYIMG',
                                        train=True, download=True, transform=transform)
         if self.args.validation:
             train_dataset, test_dataset = get_train_val(train_dataset,
                                                         test_transform, self.NAME)
         else:
-            test_dataset = TinyImagenet(base_path() + 'TINYIMG',
+            test_dataset = TinyImagenet(base_path_dataset() + 'TINYIMG',
                                         train=False, download=True, transform=test_transform)
 
         train, test = store_masked_loaders(train_dataset, test_dataset, self)

@@ -2,7 +2,7 @@ import torch
 from utils.buffer import Buffer
 from utils.args import *
 from models.utils.consolidation_model import ConsolidationModel
-import wandb
+from utils.wandbsc import WandbLogger
 import numpy as np
 from time import time
 
@@ -24,8 +24,7 @@ class ErCon(ConsolidationModel):
     def __init__(self, backbone, loss, args, transform):
         super(ErCon, self).__init__(backbone, loss, args, transform)
         self.buffer = Buffer(self.args.buffer_size, self.device)
-        if args.wandb:
-            wandb.init(project="rodo-mammoth", entity="ema-frasca", config=vars(args))
+        self.wblog = WandbLogger(args)
         self.log_results = []
 
     def observe(self, inputs, labels, not_aug_inputs):
@@ -48,7 +47,7 @@ class ErCon(ConsolidationModel):
         wandb_log['class_loss'] = class_loss
 
         # running accuracy on task 2
-        if self.task > 1 and wandb.run:
+        if self.task > 1 and self.args.wandb:
             with torch.no_grad():
                 count = 0
                 acc = 0
@@ -71,8 +70,7 @@ class ErCon(ConsolidationModel):
         # bw_time = None
         # if self.args.profiler:
         #     bw_time = t2-t1
-        if wandb.run:
-            wandb.log(wandb_log)
+        self.wblog({'training': wandb_log})
 
         return loss.item()
 
@@ -88,11 +86,10 @@ class ErCon(ConsolidationModel):
             with torch.no_grad():
                 con_error = self.get_consolidation_error().item()
 
-        if wandb.run:
-            wandb.log({'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error,
-                       **{f'Class-IL task-{i+1}': acc for i, acc in enumerate(accs[0])},
-                       **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])}
-                       })
+        self.wblog({'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error,
+                    **{f'Class-IL task-{i+1}': acc for i, acc in enumerate(accs[0])},
+                    **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])}
+                    })
 
         self.log_results.append({'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error})
 

@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from backbone.MNISTMLP import MNISTMLP
 from datasets.transforms.rotation import IncrementalRotation
 import torch.nn.functional as F
-from utils.conf import base_path
+from utils.conf import base_path_dataset
 from argparse import Namespace
 import numpy as np
 from copy import deepcopy
@@ -77,7 +77,7 @@ class MNIST360:
         """
         Initializes the test loader.
         """
-        train_dataset = MyMNIST(base_path() + 'MNIST',
+        train_dataset = MyMNIST(base_path_dataset() + 'MNIST',
                                 train=True, download=True)
         if self.args.validation:
             test_transform = transforms.ToTensor()
@@ -111,7 +111,7 @@ class MNIST360:
         if self.args.validation:
             test_dataset = self.val_dataset
         else:
-            test_dataset = MNIST(base_path() + 'MNIST',
+            test_dataset = MNIST(base_path_dataset() + 'MNIST',
                                  train=False, download=True)
         for j in range(self.N_CLASSES):
             tmp_test_dataset = deepcopy(test_dataset)

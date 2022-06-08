@@ -2,7 +2,7 @@ import torch
 from utils.buffer import Buffer
 from utils.args import *
 from models.utils.consolidation_model import ConsolidationModel
-import wandb
+from utils.wandbsc import WandbLogger
 import numpy as np
 from time import time
 
@@ -26,8 +26,7 @@ class ErACECon(ConsolidationModel):
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.seen_so_far = torch.tensor([]).long().to(self.device)
         self.num_classes = self.N_TASKS * self.N_CLASSES_PER_TASK
-        if args.wandb:
-            wandb.init(project="rodo-mammoth", entity="ema-frasca", config=vars(args))
+        self.wblog = WandbLogger(args)
         self.log_results = []
 
     def observe(self, inputs, labels, not_aug_inputs):
@@ -70,8 +69,7 @@ class ErACECon(ConsolidationModel):
         # bw_time = None
         # if self.args.profiler:
         #     bw_time = t2-t1
-        if wandb.run:
-            wandb.log(wandb_log)
+        self.wblog({'training': wandb_log})
 
         return loss.item()
 
@@ -88,11 +86,13 @@ class ErACECon(ConsolidationModel):
                 con_error = self.get_consolidation_error().item()
                 print(f'con err: {con_error}')
 
-        if wandb.run:
-            wandb.log({'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error,
-                       **{f'Class-IL task-{i+1}': acc for i, acc in enumerate(accs[0])},
-                       **{f'Task-IL task-{i+1}': acc for i, acc in enumerate(accs[1])},
-                       })
+        log_obj = {
+            'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error,
+            **{f'Class-IL task-{i + 1}': acc for i, acc in enumerate(accs[0])},
+            **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])},
+            'task': self.task,
+        }
+        self.wblog({'testing': log_obj})
 
         # self.log_results.append({'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error})
         self.log_results.append({'Class-IL': accs[0], 'Task-IL': accs[1], 'Con-Error': con_error})

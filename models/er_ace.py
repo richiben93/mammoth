@@ -10,7 +10,7 @@ from utils.buffer import Buffer
 from utils.args import *
 from models.utils.continual_model import ContinualModel
 from datasets import get_dataset
-import wandb
+from utils.wandbsc import WandbLogger
 
 
 def get_parser() -> ArgumentParser:
@@ -34,8 +34,7 @@ class ErACE(ContinualModel):
         self.n_tasks = dataset.N_TASKS
         self.num_classes = dataset.N_TASKS * dataset.N_CLASSES_PER_TASK
         self.task = 0
-        if args.wandb:
-            wandb.init(project="rodo-mammoth", entity="ema-frasca", config=vars(args))
+        self.wblog = WandbLogger(args)
 
     def end_task(self, dataset):
         self.task += 1
@@ -72,8 +71,7 @@ class ErACE(ContinualModel):
 
         self.buffer.add_data(examples=not_aug_inputs, labels=labels)
 
-        if wandb.run:
-            wandb.log(wandb_log)
+        self.wblog({'training': wandb_log})
 
         return loss.item()
 
@@ -86,10 +84,12 @@ class ErACE(ContinualModel):
         #     with torch.no_grad():
         #         con_error = self.get_consolidation_error().item()
 
-        if wandb.run:
-            wandb.log({'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error,
-                       **{f'Class-IL task-{i+1}': acc for i, acc in enumerate(accs[0])},
-                       **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])}
-                       })
+        log_obj = {
+            'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error,
+            **{f'Class-IL task-{i + 1}': acc for i, acc in enumerate(accs[0])},
+            **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])},
+            'task': self.task,
+        }
+        self.wblog({'testing': log_obj})
 
         # self.log_results.append({'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error})

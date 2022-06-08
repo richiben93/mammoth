@@ -8,7 +8,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from backbone.MNISTMLP import MNISTMLP
 import torch.nn.functional as F
-from utils.conf import base_path
+from utils.conf import base_path_dataset
 from PIL import Image
 import numpy as np
 from datasets.utils.validation import get_train_val
@@ -61,13 +61,13 @@ class SequentialMNIST(ContinualDataset):
 
     def get_data_loaders(self):
         transform = transforms.ToTensor()
-        train_dataset = MyMNIST(base_path() + 'MNIST',
+        train_dataset = MyMNIST(base_path_dataset() + 'MNIST',
                                 train=True, download=True, transform=transform)
         if self.args.validation:
             train_dataset, test_dataset = get_train_val(train_dataset,
                                                         transform, self.NAME)
         else:
-            test_dataset = MNIST(base_path() + 'MNIST',
+            test_dataset = MNIST(base_path_dataset() + 'MNIST',
                                 train=False, download=True, transform=transform)
 
         train, test = store_masked_loaders(train_dataset, test_dataset, self)
@@ -75,7 +75,7 @@ class SequentialMNIST(ContinualDataset):
 
     def not_aug_dataloader(self, batch_size):
         transform = transforms.ToTensor()
-        train_dataset = MyMNIST(base_path() + 'MNIST',
+        train_dataset = MyMNIST(base_path_dataset() + 'MNIST',
                                 train=True, download=True, transform=transform)
         train_mask = np.logical_and(np.array(train_dataset.targets) >= self.i -
             self.N_CLASSES_PER_TASK, np.array(train_dataset.targets) < self.i)

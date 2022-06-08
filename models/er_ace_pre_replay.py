@@ -1,8 +1,11 @@
 import torch
+from torch.utils.data import DataLoader
+
 from utils.buffer import Buffer
 from utils.args import *
 from models.utils.consolidation_pretrain import PretrainedConsolidationModel
 import numpy as np
+from utils.spectral_analysis import calc_euclid_dist, calc_ADL_knn
 from time import time
 from utils.conf import base_path
 from utils.wandbsc import WandbLogger
@@ -16,32 +19,74 @@ def get_parser() -> ArgumentParser:
     add_experiment_args(parser)
     add_rehearsal_args(parser)
     PretrainedConsolidationModel.add_consolidation_args(parser)
-    parser.add_argument('--pre_minibatch', type=int, required=True,
-                        help='Size of pre-dataset minibatch replay.')
+    parser.add_argument('--pre_minibatch', type=int, default=-1,
+                        help='Size of pre-dataset minibatch replay (for lats and dists).')
+    parser.add_argument('--replay_mode', type=str, required=True, choices=['lats', 'dists', 'graph'],
+                        help='What you replay.')
+    parser.add_argument('--replay_weight', type=float, required=True,
+                        help='Weight of replay.')
     return parser
 
 
-class ErACEPre(PretrainedConsolidationModel):
-    NAME = 'er_ace_pre'
+class ErACEPreReplay(PretrainedConsolidationModel):
+    NAME = 'er_ace_pre_replay'
     COMPATIBILITY = ['class-il', 'domain-il', 'task-il', 'general-continual']
 
     def __init__(self, backbone, loss, args, transform):
-        super(ErACEPre, self).__init__(backbone, loss, args, transform)
+        if args.pre_minibatch < 0 or args.replay_mode == 'graph':
+            args.pre_minibatch = args.spectral_buffer_size
+        super(ErACEPreReplay, self).__init__(backbone, loss, args, transform)
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.seen_so_far = torch.tensor([]).long().to(self.device)
         self.num_classes = self.N_TASKS * self.N_CLASSES_PER_TASK
-        self.args.name = 'EracePre' if args.con_weight == 0 else 'EracePreCon'
+        self.args.name = 'EracePre' + args.replay_mode.capitalize()
         self.wblog = WandbLogger(args, name=self.args.name)
         self.log_results = []
         self.log_latents = []
         self.add_log_latents()
+        self.spectral_memory = self.init_spectre()
+
+    def get_spectre(self, x: torch.Tensor):
+        spectre = self.net.features(x)
+        if self.args.replay_mode != 'lats':
+            spectre = calc_euclid_dist(spectre)
+        if self.args.replay_mode == 'graph':
+            spectre = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=False)
+        return spectre
+
+    @torch.no_grad()
+    def init_spectre(self):
+        inputs, labels = self.spectral_buffer.get_all_data()
+        self.net.eval()
+        spectre = self.get_spectre(inputs)
+        self.net.train()
+        # self.spectral_buffer.empty()
+        # self.spectral_buffer.add_data(inputs, labels=labels, logits=spectre)
+        return spectre
+
+    def get_replay_loss(self):
+        inputs, labels = self.spectral_buffer.get_all_data()
+        targets = self.spectral_memory
+        if self.args.pre_minibatch < self.args.spectral_buffer_size:
+            choices = np.random.choice(len(labels), size=self.args.pre_minibatch, replace=False)
+            inputs = inputs[choices]
+            labels = labels[choices]
+            targets = targets[choices]
+            if self.args.replay_mode == 'dists':
+                targets = targets[:, choices]
+
+
+        spectre = self.get_spectre(inputs)
+        return torch.square(spectre - targets).sum()
 
     def observe(self, inputs, labels, not_aug_inputs):
-        wandb_log = {'loss': None, 'class_loss': None, 'con_loss': None, 'task': self.task}
+        wandb_log = {'loss': None, 'class_loss': None, 'replay_loss': None, 'task': self.task}
 
         self.opt.zero_grad()
-        con_loss = super().observe(inputs, labels, not_aug_inputs)
-        wandb_log['con_loss'] = con_loss
+        # with torch.no_grad():
+        #     self.net.eval()
+        #     sploss = self.get_replay_loss()
+        #     self.net.train()
 
         present = labels.unique()
         self.seen_so_far = torch.cat([self.seen_so_far, present]).unique()
@@ -58,20 +103,17 @@ class ErACEPre(PretrainedConsolidationModel):
             # sample from buffer
             buf_inputs, buf_labels = self.buffer.get_data(self.args.minibatch_size, transform=self.transform)
             class_loss += self.loss(self.net(buf_inputs), buf_labels)
-
-        if self.args.pre_minibatch > 0:
-            buf_inputs, buf_labels = self.spectral_buffer.get_data(self.args.pre_minibatch)
-            features = self.net.features(buf_inputs)
-            logits = self.pre_classifier(features)
-            class_loss += self.loss(logits, buf_labels)
+        loss = class_loss
         wandb_log['class_loss'] = class_loss.item()
+
+        if self.args.pre_minibatch > 0 and self.args.replay_weight > 0:
+            replay_loss = self.get_replay_loss()
+            loss += replay_loss * self.args.replay_weight
+            wandb_log['replay_loss'] = replay_loss.item()
 
         if self.args.buffer_size > 0:
             self.buffer.add_data(examples=not_aug_inputs, labels=labels)
 
-        loss = class_loss
-        if con_loss is not None and self.args.con_weight > 0:
-            loss += self.args.con_weight * con_loss
         wandb_log['loss'] = loss
 
         loss.backward()
@@ -80,19 +122,19 @@ class ErACEPre(PretrainedConsolidationModel):
         self.wblog({'training': wandb_log})
         return loss.item()
 
+    def end_task(self, dataset):
+        self.task += 1
+
     def log_accs(self, accs):
         cil_acc, til_acc = np.mean(accs, axis=1).tolist()
         pre_acc = self.pre_dataset_train_head()
 
         # running consolidation error
-        con_error = None
-        if self.task > 0:
-            with torch.no_grad():
-                con_error = self.get_consolidation_error().item()
-                # print(f'con err: {con_error}')
+        with torch.no_grad():
+            replay_error = self.get_replay_loss()
 
         log_obj = {
-            'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error,
+            'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': replay_error,
             'PreTrain-acc': pre_acc,
             **{f'Class-IL task-{i + 1}': acc for i, acc in enumerate(accs[0])},
             **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])},
@@ -103,9 +145,9 @@ class ErACEPre(PretrainedConsolidationModel):
         self.add_log_latents()
         self.save_checkpoint(self.task)
 
-        if self.task > 2:
-            self.end_training()
-            exit()
+        # if self.task > 2:
+        #     self.end_training()
+        #     exit()
 
         if self.task == self.N_TASKS:
             self.end_training()

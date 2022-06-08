@@ -7,7 +7,7 @@ from torchvision.datasets import CIFAR10
 import torchvision.transforms as transforms
 from backbone.ResNet18 import resnet18
 import torch.nn.functional as F
-from utils.conf import base_path
+from utils.conf import base_path_dataset
 from PIL import Image
 from datasets.utils.validation import get_train_val
 from datasets.utils.continual_dataset import ContinualDataset, store_masked_loaders
@@ -70,13 +70,13 @@ class SequentialCIFAR10(ContinualDataset):
         test_transform = transforms.Compose(
             [transforms.ToTensor(), self.get_normalization_transform()])
 
-        train_dataset = MyCIFAR10(base_path() + 'CIFAR10', train=True,
+        train_dataset = MyCIFAR10(base_path_dataset() + 'CIFAR10', train=True,
                                   download=True, transform=transform)
         if self.args.validation:
             train_dataset, test_dataset = get_train_val(train_dataset,
                                                     test_transform, self.NAME)
         else:
-            test_dataset = CIFAR10(base_path() + 'CIFAR10',train=False,
+            test_dataset = CIFAR10(base_path_dataset() + 'CIFAR10',train=False,
                                    download=True, transform=test_transform)
 
         train, test = store_masked_loaders(train_dataset, test_dataset, self)
@@ -85,7 +85,7 @@ class SequentialCIFAR10(ContinualDataset):
     def not_aug_dataloader(self, batch_size):
         transform = transforms.Compose([transforms.ToTensor(), self.get_normalization_transform()])
 
-        train_dataset = MyCIFAR10(base_path() + 'CIFAR10', train=True,
+        train_dataset = MyCIFAR10(base_path_dataset() + 'CIFAR10', train=True,
                                   download=True, transform=transform)
         train_loader = get_previous_train_loader(train_dataset, batch_size, self)
 

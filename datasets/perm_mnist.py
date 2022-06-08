@@ -9,7 +9,7 @@ from datasets.transforms.permutation import Permutation
 from torch.utils.data import DataLoader
 from backbone.MNISTMLP import MNISTMLP
 import torch.nn.functional as F
-from utils.conf import base_path
+from utils.conf import base_path_dataset
 from PIL import Image
 from datasets.utils.validation import get_train_val
 from typing import Tuple
@@ -17,13 +17,13 @@ from datasets.utils.continual_dataset import ContinualDataset
 
 
 def store_mnist_loaders(transform, setting):
-    train_dataset = MyMNIST(base_path() + 'MNIST',
+    train_dataset = MyMNIST(base_path_dataset() + 'MNIST',
                             train=True, download=True, transform=transform)
     if setting.args.validation:
         train_dataset, test_dataset = get_train_val(train_dataset,
                                                     transform, setting.NAME)
     else:
-        test_dataset = MNIST(base_path() + 'MNIST',
+        test_dataset = MNIST(base_path_dataset() + 'MNIST',
                              train=False, download=True, transform=transform)
 
     train_loader = DataLoader(train_dataset,
