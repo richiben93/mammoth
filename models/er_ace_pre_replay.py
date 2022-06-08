@@ -51,7 +51,7 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         if self.args.replay_mode != 'lats':
             spectre = calc_euclid_dist(spectre)
         if self.args.replay_mode == 'graph':
-            spectre = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=False)
+            spectre, _, _ = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=False)
         return spectre
 
     @torch.no_grad()
@@ -83,10 +83,10 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         wandb_log = {'loss': None, 'class_loss': None, 'replay_loss': None, 'task': self.task}
 
         self.opt.zero_grad()
-        # with torch.no_grad():
-        #     self.net.eval()
-        #     sploss = self.get_replay_loss()
-        #     self.net.train()
+        with torch.no_grad():
+            self.net.eval()
+            sploss = self.get_replay_loss()
+            self.net.train()
 
         present = labels.unique()
         self.seen_so_far = torch.cat([self.seen_so_far, present]).unique()
