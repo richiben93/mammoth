@@ -21,7 +21,8 @@ def get_parser() -> ArgumentParser:
     PretrainedConsolidationModel.add_consolidation_args(parser)
     parser.add_argument('--pre_minibatch', type=int, default=-1,
                         help='Size of pre-dataset minibatch replay (for lats and dists).')
-    parser.add_argument('--replay_mode', type=str, required=True, choices=['lats', 'dists', 'graph'],
+    parser.add_argument('--replay_mode', type=str, required=True, choices=['lats', 'dists', 'graph', 'laplacian',
+                                                                           'evec', 'fmap'],
                         help='What you replay.')
     parser.add_argument('--replay_weight', type=float, required=True,
                         help='Weight of replay.')
@@ -53,15 +54,16 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         if self.args.replay_mode != 'lats':
             spectre = calc_euclid_dist(spectre)
         if self.args.replay_mode == 'graph':
-            spectre, _, _ = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=False)
+            spectre, _, _ = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=self.args.graph_sym)
         if self.args.replay_mode == 'laplacian':
             A, D, L = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=True)
             spectre = torch.eye(A.shape[0]).to(A.device) - normalize_A(A, D)
-        if self.args.replay_mode == 'evec':
+        if self.args.replay_mode in ('evec', 'fmap'):
             A, D, L = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=True)
             L = torch.eye(A.shape[0]).to(A.device) - normalize_A(A, D)
             _, spectre = find_eigs(L, n_pairs=self.args.fmap_dim)
-            spectre = spectre.abs()
+            if self.args.replay_mode == 'evec':
+                spectre = spectre.abs()
 
         return spectre
 
@@ -86,8 +88,12 @@ class ErACEPreReplay(PretrainedConsolidationModel):
             if self.args.replay_mode == 'dists':
                 targets = targets[:, choices]
 
-
         spectre = self.get_spectre(inputs)
+
+        if self.args.replay_mode == 'fmap':
+            spectre = spectre.T @ targets
+            targets = torch.eye(spectre.shape[0]).to(spectre.device)
+
         return torch.square(spectre - targets).sum()
 
     def observe(self, inputs, labels, not_aug_inputs):
