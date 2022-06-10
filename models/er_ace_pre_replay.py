@@ -21,10 +21,12 @@ def get_parser() -> ArgumentParser:
     PretrainedConsolidationModel.add_consolidation_args(parser)
     parser.add_argument('--pre_minibatch', type=int, default=-1,
                         help='Size of pre-dataset minibatch replay (for lats and dists).')
-    parser.add_argument('--replay_mode', type=str, required=True, choices=['lats', 'dists', 'graph'],
+    parser.add_argument('--replay_mode', type=str, required=True, choices=['lats', 'dists', 'graph', 'lapl'],
                         help='What you replay.')
     parser.add_argument('--replay_weight', type=float, required=True,
                         help='Weight of replay.')
+    parser.add_argument('--graph_sym', action='store_true',
+                        help='Construct a symmetric graph.')
     return parser
 
 
@@ -51,7 +53,7 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         if self.args.replay_mode != 'lats':
             spectre = calc_euclid_dist(spectre)
         if self.args.replay_mode == 'graph':
-            spectre, _, _ = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=False)
+            spectre, _, _ = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=self.args.graph_sym)
         return spectre
 
     @torch.no_grad()
@@ -83,10 +85,10 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         wandb_log = {'loss': None, 'class_loss': None, 'replay_loss': None, 'task': self.task}
 
         self.opt.zero_grad()
-        with torch.no_grad():
-            self.net.eval()
-            sploss = self.get_replay_loss()
-            self.net.train()
+        # with torch.no_grad():
+        #     self.net.eval()
+        #     sploss = self.get_replay_loss()
+        #     self.net.train()
 
         present = labels.unique()
         self.seen_so_far = torch.cat([self.seen_so_far, present]).unique()
@@ -170,4 +172,4 @@ class ErACEPreReplay(PretrainedConsolidationModel):
             # obj = {**vars(self.args), 'results': self.log_results}
             # self.print_logs(log_dir, obj, name='results')
             obj = {**vars(self.args), 'results': self.log_results, 'latents': self.log_latents}
-            # self.print_logs(log_dir, obj, name='latents')
+            self.print_logs(log_dir, obj, name='latents')
