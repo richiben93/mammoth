@@ -5,7 +5,7 @@ from utils.buffer import Buffer
 from utils.args import *
 from models.utils.consolidation_pretrain import PretrainedConsolidationModel
 import numpy as np
-from utils.spectral_analysis import calc_euclid_dist, calc_ADL_knn
+from utils.spectral_analysis import calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs
 from time import time
 from utils.conf import base_path
 from utils.wandbsc import WandbLogger
@@ -21,7 +21,8 @@ def get_parser() -> ArgumentParser:
     PretrainedConsolidationModel.add_consolidation_args(parser)
     parser.add_argument('--pre_minibatch', type=int, default=-1,
                         help='Size of pre-dataset minibatch replay (for lats and dists).')
-    parser.add_argument('--replay_mode', type=str, required=True, choices=['lats', 'dists', 'graph'],
+    parser.add_argument('--replay_mode', type=str, required=True, choices=['lats', 'dists', 'graph', 'laplacian',
+                                                                           'evec'],
                         help='What you replay.')
     parser.add_argument('--replay_weight', type=float, required=True,
                         help='Weight of replay.')
@@ -33,14 +34,14 @@ class ErACEPreReplay(PretrainedConsolidationModel):
     COMPATIBILITY = ['class-il', 'domain-il', 'task-il', 'general-continual']
 
     def __init__(self, backbone, loss, args, transform):
-        if args.pre_minibatch < 0 or args.replay_mode == 'graph':
+        if args.pre_minibatch < 0 or args.replay_mode not in ['lats', 'dists']:
             args.pre_minibatch = args.spectral_buffer_size
         super(ErACEPreReplay, self).__init__(backbone, loss, args, transform)
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.seen_so_far = torch.tensor([]).long().to(self.device)
         self.num_classes = self.N_TASKS * self.N_CLASSES_PER_TASK
         self.args.name = 'EracePre' + args.replay_mode.capitalize()
-        self.wblog = WandbLogger(args, name=self.args.name)
+        self.wblog = WandbLogger(args, name=self.args.name, prj=args.experiment_name, entity='richiben')
         self.log_results = []
         self.log_latents = []
         self.add_log_latents()
@@ -52,6 +53,15 @@ class ErACEPreReplay(PretrainedConsolidationModel):
             spectre = calc_euclid_dist(spectre)
         if self.args.replay_mode == 'graph':
             spectre, _, _ = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=False)
+        if self.args.replay_mode == 'laplacian':
+            A, D, L = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=True)
+            spectre = torch.eye(A.shape[0]).to(A.device) - normalize_A(A, D)
+        if self.args.replay_mode == 'evec':
+            A, D, L = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=True)
+            L = torch.eye(A.shape[0]).to(A.device) - normalize_A(A, D)
+            _, spectre = find_eigs(L, n_pairs=self.args.fmap_dim)
+            spectre = spectre.abs()
+
         return spectre
 
     @torch.no_grad()
@@ -75,7 +85,6 @@ class ErACEPreReplay(PretrainedConsolidationModel):
             if self.args.replay_mode == 'dists':
                 targets = targets[:, choices]
 
-
         spectre = self.get_spectre(inputs)
         return torch.square(spectre - targets).sum()
 
@@ -83,10 +92,10 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         wandb_log = {'loss': None, 'class_loss': None, 'replay_loss': None, 'task': self.task}
 
         self.opt.zero_grad()
-        with torch.no_grad():
-            self.net.eval()
-            sploss = self.get_replay_loss()
-            self.net.train()
+        # with torch.no_grad():
+        #     self.net.eval()
+        #     sploss = self.get_replay_loss()
+        #     self.net.train()
 
         present = labels.unique()
         self.seen_so_far = torch.cat([self.seen_so_far, present]).unique()
