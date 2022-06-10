@@ -21,11 +21,12 @@ def get_parser() -> ArgumentParser:
     PretrainedConsolidationModel.add_consolidation_args(parser)
     parser.add_argument('--pre_minibatch', type=int, default=-1,
                         help='Size of pre-dataset minibatch replay (for lats and dists).')
-    parser.add_argument('--replay_mode', type=str, required=True, choices=['lats', 'dists', 'graph', 'laplacian',
-                                                                           'evec'],
+    parser.add_argument('--replay_mode', type=str, required=True, choices=['lats', 'dists', 'graph'],
                         help='What you replay.')
     parser.add_argument('--replay_weight', type=float, required=True,
                         help='Weight of replay.')
+    parser.add_argument('--graph_sym', action='store_true',
+                        help='Construct a symmetric graph.')
     return parser
 
 
@@ -84,6 +85,7 @@ class ErACEPreReplay(PretrainedConsolidationModel):
             targets = targets[choices]
             if self.args.replay_mode == 'dists':
                 targets = targets[:, choices]
+
 
         spectre = self.get_spectre(inputs)
         return torch.square(spectre - targets).sum()
@@ -179,4 +181,4 @@ class ErACEPreReplay(PretrainedConsolidationModel):
             # obj = {**vars(self.args), 'results': self.log_results}
             # self.print_logs(log_dir, obj, name='results')
             obj = {**vars(self.args), 'results': self.log_results, 'latents': self.log_latents}
-            # self.print_logs(log_dir, obj, name='latents')
+            self.print_logs(log_dir, obj, name='latents')

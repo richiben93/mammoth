@@ -36,12 +36,12 @@ def calc_ADL_knn(distances: torch.Tensor, k: int, symmetric: bool = True):
     final_A = torch.zeros_like(new_A)
     idxes = new_A.topk(k, largest=False)[1]
     final_A[torch.arange(len(idxes)).unsqueeze(1), idxes] = 1
+    w = knn(-new_A.unsqueeze(0)).squeeze().sum(-1)
     if symmetric:
         final_A = ((final_A + final_A.T) > 0).float()
+        w = w + w.T
 
     # backpropagation trick
-    w = knn(-new_A.unsqueeze(0)).squeeze().sum(-1)
-    # Ahk, _, _ = calc_ADL_from_dist(distances, sigma=1)
     A = final_A.detach() + (w - w.detach())
     # A = final_A
 
