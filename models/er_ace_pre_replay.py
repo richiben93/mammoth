@@ -22,12 +22,13 @@ def get_parser() -> ArgumentParser:
     parser.add_argument('--pre_minibatch', type=int, default=-1,
                         help='Size of pre-dataset minibatch replay (for lats and dists).')
     parser.add_argument('--replay_mode', type=str, required=True, choices=['lats', 'dists', 'graph', 'laplacian',
-                                                                           'evec', 'fmap'],
+                                                                           'evec', 'fmap', 'eval', 'fmeval-0101',
+                                                                           'fmeval-0110', 'fmeval-1001', 'fmeval-1010'],
                         help='What you replay.')
     parser.add_argument('--replay_weight', type=float, required=True,
                         help='Weight of replay.')
     parser.add_argument('--graph_sym', action='store_true',
-                        help='Construct a symmetric graph.')
+                        help='Construct a symmetric graph (only for \'graph\' mode).')
     return parser
 
 
@@ -43,7 +44,7 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         self.seen_so_far = torch.tensor([]).long().to(self.device)
         self.num_classes = self.N_TASKS * self.N_CLASSES_PER_TASK
         self.args.name = 'EracePre' + args.replay_mode.capitalize()
-        self.wblog = WandbLogger(args, name=self.args.name, prj=args.experiment_name, entity='richiben')
+        self.wblog = WandbLogger(args, name=self.args.name)
         self.log_results = []
         self.log_latents = []
         self.add_log_latents()
@@ -64,6 +65,15 @@ class ErACEPreReplay(PretrainedConsolidationModel):
             _, spectre = find_eigs(L, n_pairs=self.args.fmap_dim)
             if self.args.replay_mode == 'evec':
                 spectre = spectre.abs()
+        if self.args.replay_mode == 'eval':
+            A, D, L = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=True)
+            L = torch.eye(A.shape[0]).to(A.device) - normalize_A(A, D)
+            spectre, _ = find_eigs(L, n_pairs=self.args.fmap_dim)
+        if self.args.replay_mode.startswith('fmeval'):
+            A, D, L = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=True)
+            L = torch.eye(A.shape[0]).to(A.device) - normalize_A(A, D)
+            eigenvalues, eigenvectors = find_eigs(L, n_pairs=self.args.fmap_dim)
+            spectre = eigenvalues, eigenvectors
 
         return spectre
 
@@ -93,6 +103,14 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         if self.args.replay_mode == 'fmap':
             spectre = (spectre.T @ targets).abs()
             targets = torch.eye(spectre.shape[0]).to(spectre.device)
+
+        if self.args.replay_mode.startswith('fmeval'):
+            evects = [targets[1], spectre[1]]
+            evals = [targets[0], spectre[0]]
+            codes = [int(c) for c in self.args.replay_mode.rsplit('-')[1]]
+            assert len(codes) == 4
+            spectre = (evects[codes[0]].T @ evects[codes[1]]) @ torch.diag(evals[0])
+            targets = torch.diag(evals[1]) @ (evects[codes[2]].T @ evects[codes[3]])
 
         return torch.square(spectre - targets).sum()
 
@@ -145,6 +163,7 @@ class ErACEPreReplay(PretrainedConsolidationModel):
     def log_accs(self, accs):
         cil_acc, til_acc = np.mean(accs, axis=1).tolist()
         pre_acc = self.pre_dataset_train_head()
+        assert pre_acc > 0.5, f'Accuracy on pretrain too low: \n{pre_acc}'
 
         # running consolidation error
         with torch.no_grad():
@@ -171,7 +190,9 @@ class ErACEPreReplay(PretrainedConsolidationModel):
 
     @torch.no_grad()
     def add_log_latents(self):
+        self.net.eval()
         lats, y = self.compute_buffer_latents()
+        self.net.train()
         self.log_latents.append({'feat_buf': lats.tolist(), 'y_buf': y.tolist()})
 
     def save_checkpoint(self, task: int):
