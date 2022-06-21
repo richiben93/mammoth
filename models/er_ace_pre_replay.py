@@ -91,7 +91,7 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         spectre = self.get_spectre(inputs)
 
         if self.args.replay_mode == 'fmap':
-            spectre = spectre.T @ targets
+            spectre = (spectre.T @ targets).abs()
             targets = torch.eye(spectre.shape[0]).to(spectre.device)
 
         return torch.square(spectre - targets).sum()
