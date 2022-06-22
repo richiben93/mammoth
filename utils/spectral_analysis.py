@@ -15,6 +15,9 @@ def calc_ADL_from_dist(dist_matrix: torch.Tensor, sigma=1.):
 
 def calc_euclid_dist(data: torch.Tensor):
     return ((data.unsqueeze(0) - data.unsqueeze(1)) ** 2).sum(-1)
+    
+def calc_cos_dist(data):
+    return -torch.cosine_similarity(data.unsqueeze(0), data.unsqueeze(1), dim=-1)
 
 def calc_dist_weiss(nu: torch.Tensor, logvar: torch.Tensor):
     var = logvar.exp()
