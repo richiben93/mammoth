@@ -5,7 +5,7 @@ from utils.buffer import Buffer
 from utils.args import *
 from models.utils.consolidation_pretrain import PretrainedConsolidationModel
 import numpy as np
-from utils.spectral_analysis import calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs
+from utils.spectral_analysis import calc_cos_dist, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs
 from time import time
 from utils.conf import base_path
 from utils.wandbsc import WandbLogger
@@ -20,15 +20,18 @@ def get_parser() -> ArgumentParser:
     add_rehearsal_args(parser)
     PretrainedConsolidationModel.add_consolidation_args(parser)
     parser.add_argument('--pre_minibatch', type=int, default=-1,
-                        help='Size of pre-dataset minibatch replay (for lats and dists).')
-    parser.add_argument('--replay_mode', type=str, required=True, choices=['lats', 'dists', 'graph', 'laplacian',
+                        help='Size of pre-dataset minibatch replay (for x, lats and dists).')
+    parser.add_argument('--replay_mode', type=str, required=True, choices=['x', 'lats', 'dists','graph', 'laplacian',
                                                                            'evec', 'fmap', 'eval', 'fmeval-0101',
                                                                            'fmeval-0110', 'fmeval-1001', 'fmeval-1010'],
                         help='What you replay.')
     parser.add_argument('--replay_weight', type=float, required=True,
                         help='Weight of replay.')
     parser.add_argument('--graph_sym', action='store_true',
-                        help='Construct a symmetric graph (only for \'graph\' mode).')
+                        help='Construct a symmetric graph.')
+
+    parser.add_argument('--grad_clip', default=0, type=float)
+    parser.add_argument('--cos_dist', type=int, default=0)
     return parser
 
 
@@ -37,7 +40,7 @@ class ErACEPreReplay(PretrainedConsolidationModel):
     COMPATIBILITY = ['class-il', 'domain-il', 'task-il', 'general-continual']
 
     def __init__(self, backbone, loss, args, transform):
-        if args.pre_minibatch < 0 or args.replay_mode not in ['lats', 'dists']:
+        if args.pre_minibatch < 0 or args.replay_mode not in ['x', 'lats', 'dists']:
             args.pre_minibatch = args.spectral_buffer_size
         super(ErACEPreReplay, self).__init__(backbone, loss, args, transform)
         self.buffer = Buffer(self.args.buffer_size, self.device)
@@ -50,10 +53,14 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         self.add_log_latents()
         self.spectral_memory = self.init_spectre()
 
+
     def get_spectre(self, x: torch.Tensor):
         spectre = self.net.features(x)
         if self.args.replay_mode != 'lats':
-            spectre = calc_euclid_dist(spectre)
+            if self.args.cos_dist:
+                spectre = calc_cos_dist(spectre)
+            else:
+                spectre = calc_euclid_dist(spectre)
         if self.args.replay_mode == 'graph':
             spectre, _, _ = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=self.args.graph_sym)
         if self.args.replay_mode == 'laplacian':
@@ -97,6 +104,11 @@ class ErACEPreReplay(PretrainedConsolidationModel):
             targets = targets[choices]
             if self.args.replay_mode == 'dists':
                 targets = targets[:, choices]
+
+        if self.args.replay_mode == 'x':
+            features = self.net.features(inputs)
+            preds = self.pre_classifier(features)
+            return self.loss(preds, labels)
 
         spectre = self.get_spectre(inputs)
 
@@ -152,6 +164,10 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         wandb_log['loss'] = loss
 
         loss.backward()
+        # clip gradients
+        if self.args.grad_clip > 0:
+            torch.nn.utils.clip_grad_norm_(self.net.parameters(), self.args.grad_clip)
+
         self.opt.step()
 
         self.wblog({'training': wandb_log})
