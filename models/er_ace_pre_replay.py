@@ -5,7 +5,7 @@ from utils.buffer import Buffer
 from utils.args import *
 from models.utils.consolidation_pretrain import PretrainedConsolidationModel
 import numpy as np
-from utils.spectral_analysis import calc_cos_dist, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs
+from utils.spectral_analysis import calc_cos_dist, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs, calc_ADL_heat
 from time import time
 from utils.conf import base_path
 from utils.wandbsc import WandbLogger
@@ -14,24 +14,22 @@ import os
 
 def get_parser() -> ArgumentParser:
     parser = ArgumentParser(description='Continual learning via'
-                                        ' Experience Replay ACE with Consolidation.')
+                                        ' Experience Replay ACE with Replay.')
     add_management_args(parser)
     add_experiment_args(parser)
     add_rehearsal_args(parser)
     PretrainedConsolidationModel.add_consolidation_args(parser)
     parser.add_argument('--pre_minibatch', type=int, default=-1,
                         help='Size of pre-dataset minibatch replay (for x, lats and dists).')
-    parser.add_argument('--replay_mode', type=str, required=True, choices=['x', 'lats', 'dists','graph', 'laplacian',
-                                                                           'evec', 'fmap', 'eval', 'fmeval-0101',
-                                                                           'fmeval-0110', 'fmeval-1001', 'fmeval-1010'],
-                        help='What you replay.')
+    parser.add_argument('--replay_mode', type=str, required=True, help='What you replay.',
+                        choices=['none', 'x', 'lats', 'dists','graph', 'laplacian', 'evec', 'fmap', 'eval', 'fmheat',
+                                 'fmeval-0101', 'fmeval-0110', 'fmeval-1001', 'fmeval-1010'])
     parser.add_argument('--replay_weight', type=float, required=True,
                         help='Weight of replay.')
     parser.add_argument('--graph_sym', action='store_true',
                         help='Construct a symmetric graph.')
-
-    parser.add_argument('--grad_clip', default=0, type=float)
-    parser.add_argument('--cos_dist', type=int, default=0)
+    parser.add_argument('--grad_clip', default=0, type=float, help='Clip the gradient.')
+    parser.add_argument('--cos_dist', action='store_true', help='Use cosine disttance.')
     return parser
 
 
@@ -42,12 +40,15 @@ class ErACEPreReplay(PretrainedConsolidationModel):
     def __init__(self, backbone, loss, args, transform):
         if args.pre_minibatch < 0 or args.replay_mode not in ['x', 'lats', 'dists']:
             args.pre_minibatch = args.spectral_buffer_size
+        if args.replay_mode == 'none' or args.replay_weight == 0:
+            args.replay_mode = 'none'
+            args.replay_weight = 0
         super(ErACEPreReplay, self).__init__(backbone, loss, args, transform)
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.seen_so_far = torch.tensor([]).long().to(self.device)
         self.num_classes = self.N_TASKS * self.N_CLASSES_PER_TASK
         self.args.name = 'EracePre' + args.replay_mode.capitalize()
-        self.wblog = WandbLogger(args, name=self.args.name)
+        self.wblog = WandbLogger(args, name=self.args.name, prj='rodo-pretrain')
         self.log_results = []
         self.log_latents = []
         self.add_log_latents()
@@ -66,8 +67,11 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         if self.args.replay_mode == 'laplacian':
             A, D, L = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=True)
             spectre = torch.eye(A.shape[0]).to(A.device) - normalize_A(A, D)
-        if self.args.replay_mode in ('evec', 'fmap'):
-            A, D, L = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=True)
+        if self.args.replay_mode in ('evec', 'fmap', 'fmheat'):
+            if self.args.replay_mode == 'fmheat':
+                A, D, L = calc_ADL_heat(spectre)
+            else:
+                A, D, L = calc_ADL_knn(spectre, k=self.args.knn_laplace, symmetric=True)
             L = torch.eye(A.shape[0]).to(A.device) - normalize_A(A, D)
             _, spectre = find_eigs(L, n_pairs=self.args.fmap_dim)
             if self.args.replay_mode == 'evec':
@@ -112,7 +116,7 @@ class ErACEPreReplay(PretrainedConsolidationModel):
 
         spectre = self.get_spectre(inputs)
 
-        if self.args.replay_mode == 'fmap':
+        if self.args.replay_mode in ('fmap', 'fmheat'):
             spectre = (spectre.T @ targets).abs()
             targets = torch.eye(spectre.shape[0]).to(spectre.device)
 
@@ -179,6 +183,7 @@ class ErACEPreReplay(PretrainedConsolidationModel):
     def log_accs(self, accs):
         cil_acc, til_acc = np.mean(accs, axis=1).tolist()
         pre_acc = self.pre_dataset_train_head()
+
         assert pre_acc > 0.5, f'Accuracy on pretrain too low: \n{pre_acc}'
 
         # running consolidation error
@@ -197,7 +202,7 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         self.add_log_latents()
         self.save_checkpoint(self.task)
 
-        # if self.task > 2:
+        # if self.task > 2 and self.args.save_checks:
         #     self.end_training()
         #     exit()
 
@@ -212,7 +217,7 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         self.log_latents.append({'feat_buf': lats.tolist(), 'y_buf': y.tolist()})
 
     def save_checkpoint(self, task: int):
-        if self.args.custom_log:
+        if self.args.save_checks:
             log_dir = f'{base_path()}checkpoints/{self.args.name}'
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir)

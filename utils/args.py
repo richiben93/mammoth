@@ -35,12 +35,12 @@ def add_management_args(parser: ArgumentParser) -> None:
 
     parser.add_argument('--csv_log', action='store_true',
                         help='Enable csv logging')
-    parser.add_argument('--tensorboard', action='store_true',
-                        help='Enable tensorboard logging')
     parser.add_argument('--wandb', action='store_true',
                         help='Enable wandb logging')
     parser.add_argument('--custom_log', action='store_true',
                         help='Enable log (custom for each model, must be implemented)')
+    parser.add_argument('--save_checks', action='store_true',
+                        help='Save checkpoints')
     parser.add_argument('--validation', action='store_true',
                         help='Test on the validation set')
 

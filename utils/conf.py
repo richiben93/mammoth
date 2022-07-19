@@ -33,13 +33,15 @@ def base_path() -> str:
     Returns the base bath where to log accuracies and tensorboard data.
     """
     return '/nas/softechict-nas-2/efrascaroli/mammoth-data/' if 'SLURM_CONF' in os.environ else './data/'
+    # return '/scratch/efrascaroli/mammoth/' if 'SLURM_CONF' in os.environ else './data/'
 
 
 def base_path_dataset() -> str:
     """
     Returns the base bath where to log accuracies and tensorboard data.
     """
-    return '/nas/softechict-nas-2/efrascaroli/mammoth-data/' if 'SLURM_CONF' in os.environ else './data/'
+    return '/nas/softechict-nas-2/efrascaroli/datasets/' if 'SLURM_CONF' in os.environ else './data/'
+    # return '/scratch/efrascaroli/mammoth/datasets' if 'SLURM_CONF' in os.environ else './data/'
 
 
 def set_random_seed(seed: int) -> None:

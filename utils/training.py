@@ -86,9 +86,6 @@ def train(model: ContinualModel, dataset: ContinualDataset,
     if args.csv_log:
         #csv_logger = CsvLogger(dataset.SETTING, dataset.NAME, model.NAME)
         csv_logger = DictxtLogger(dataset.SETTING, dataset.NAME, model.NAME)
-    if args.tensorboard:
-        tb_logger = TensorboardLogger(args, dataset.SETTING, model_stash)
-        model_stash['tensorboard_name'] = tb_logger.get_name()
 
     dataset_copy = get_dataset(args)
     for t in range(dataset.N_TASKS):
@@ -126,9 +123,6 @@ def train(model: ContinualModel, dataset: ContinualDataset,
 
                 progress_bar(i, len(train_loader), epoch, t, loss)
 
-                if args.tensorboard:
-                    tb_logger.log_loss(loss, args, epoch, t, i)
-
                 model_stash['batch_idx'] = i + 1
             model_stash['epoch_idx'] = epoch + 1
             model_stash['batch_idx'] = 0
@@ -152,8 +146,6 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         if args.csv_log:
             csv_logger.log(mean_acc)
             csv_logger.log_fullacc(accs)
-        if args.tensorboard:
-            tb_logger.log_accuracy(np.array(accs), mean_acc, args, t)
 
     if args.csv_log:
         csv_logger.add_bwt(results, results_mask_classes)
@@ -162,7 +154,5 @@ def train(model: ContinualModel, dataset: ContinualDataset,
             csv_logger.add_fwt(results, random_results_class,
                                results_mask_classes, random_results_task)
 
-    if args.tensorboard:
-        tb_logger.close()
     if args.csv_log:
         csv_logger.write(vars(args))

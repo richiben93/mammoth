@@ -17,7 +17,7 @@ from torch.optim import SGD
 checkpoints = {
     'cifar100': {
         'name': 'Cifar100',
-        'ds_path': base_path_dataset(),
+        'ds_path': base_path_dataset() + 'CIFAR100',
         'path': base_path() + 'checkpoints/rs18_cifar100_new.pth',
         'dataset': CIFAR100,
         'transform': transforms.Compose([transforms.ToTensor(),
@@ -98,7 +98,7 @@ class PretrainedConsolidationModel(ConsolidationModel):
 
         self.net.eval()
         ds = self.get_pre_dataset()
-        dl = DataLoader(ds, 32, shuffle=True)
+        dl = DataLoader(ds, 128, shuffle=True)
         self.pre_classifier = self.get_pre_classifier()
         opt = SGD(self.pre_classifier.parameters(), lr=self.checkpoint_data['lr'])
         for epoch in range(n_epochs):
@@ -120,7 +120,7 @@ class PretrainedConsolidationModel(ConsolidationModel):
     @torch.no_grad()
     def pre_dataset_test(self):
         ds = self.get_pre_dataset(train=False)
-        dl = DataLoader(ds, 32)
+        dl = DataLoader(ds, 128)
         acc = 0
         self.net.eval()
         for x, y in dl:
