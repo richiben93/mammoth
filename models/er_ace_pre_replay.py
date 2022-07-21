@@ -48,7 +48,7 @@ class ErACEPreReplay(PretrainedConsolidationModel):
         self.seen_so_far = torch.tensor([]).long().to(self.device)
         self.num_classes = self.N_TASKS * self.N_CLASSES_PER_TASK
         self.args.name = 'EracePre' + args.replay_mode.capitalize()
-        self.wblog = WandbLogger(args, name=self.args.name, prj='rodo-pretrain')
+        self.wblog = WandbLogger(args, name=self.args.name, prj='rodo-pretrain', entity='regaz')
         self.log_results = []
         self.log_latents = []
         self.add_log_latents()
