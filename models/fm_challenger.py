@@ -29,7 +29,7 @@ def get_parser() -> ArgumentParser:
     parser.add_argument('--heat_kernel', action='store_true', help='Use heat kernel instead of knn.')
 
     parser.add_argument('--fm_mode', type=str, required=True, help='What you replay.',
-                        choices=['lats', 'dists', 'graph', 'laplacian', 'evec', 'fmap', 'eval'])
+                        choices=['lats', 'dists', 'graph', 'laplacian', 'evec', 'fmap', 'eval', 'egap-5'])
     parser.add_argument('--fm_weight', type=float, required=True,
                         help='Weight of replay.')
     return parser
@@ -49,7 +49,7 @@ class FMChallenger(ContinualModel):
             self.args.name += 'Cos'
         if self.args.heat_kernel:
             self.args.name += 'Heat'
-        self.wblog = WandbLogger(args, name=self.args.name, prj='rodo-challenge')
+        self.wblog = WandbLogger(args, name=self.args.name, prj='rodo-challenge', entity='regaz')
         self.task = 0
 
     def get_all_losses(self):
@@ -86,6 +86,15 @@ class FMChallenger(ContinualModel):
 
         c = evects2.T @ evects1
         losses['fmap'] = F.mse_loss(c.abs(), torch.eye(c.shape[0]).to(c.device))
+
+        gaps = evals2[1:] - evals2[:-1]
+        losses['egap'] = torch.argmax(gaps)
+
+        if self.args.fm_mode.startswith('egap'):
+            n = int(self.args.fm_mode.split('-')[1])
+            # gaps[n] = -gaps[n]
+            # losses[self.args.fm_mode] = gaps.sum()
+            losses[self.args.fm_mode] = -gaps[n]
         return losses, c
 
     def observe(self, inputs, labels, not_aug_inputs):
@@ -104,11 +113,11 @@ class FMChallenger(ContinualModel):
                 with torch.no_grad():
                     fm_losses, c = self.get_all_losses()
                 wandb_log['fm_loss'] = {k: v.item() for k, v in fm_losses.items()}
-                wandb_log['fm_c'] = wandb.Image(c.detach().cpu().numpy())
+                # wandb_log['fm_c'] = wandb.Image(c.detach().cpu().numpy())
         else:
             fm_losses, c = self.get_all_losses()
             wandb_log['fm_loss'] = {k: v.item() for k, v in fm_losses.items()}
-            wandb_log['fm_c'] = wandb.Image(c.detach().cpu().numpy())
+            # wandb_log['fm_c'] = wandb.Image(c.detach().cpu().numpy())
             loss = fm_losses[self.args.fm_mode] * self.args.fm_weight
 
         wandb_log['loss'] = loss
