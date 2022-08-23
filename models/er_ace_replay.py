@@ -85,9 +85,17 @@ class ErACEReplay(ContinualModel):
         if self.args.replay_mode == 'none':
             return torch.tensor(0., dtype=torch.float, device=self.device)
         if self.args.rep_minibatch == self.args.buffer_size:
-            inputs, labels, features1 = self.buffer.get_all_data(self.transform)
+            if self.args.replay_mode == 'egap':
+                inputs, labels = self.future_buffer.get_all_data(self.transform)
+                features1 = self.net.features(inputs).detach()
+            else:
+                inputs, labels, features1 = self.buffer.get_all_data(self.transform)
         else:
-            inputs, labels, features1 = self.buffer.get_data(self.args.rep_minibatch, self.transform)
+            if self.args.replay_mode == 'egap':
+                inputs, labels = self.future_buffer.get_data(self.args.rep_minibatch, self.transform)
+                features1 = self.net.features(inputs).detach()
+            else:
+                inputs, labels, features1 = self.buffer.get_data(self.args.rep_minibatch, self.transform)
         features2 = self.net.features(inputs)
 
         if self.args.replay_mode == 'features':
@@ -165,7 +173,7 @@ class ErACEReplay(ContinualModel):
         loss = class_loss
         if self.task > 0 and self.args.buffer_size > 0:
             # sample from buffer
-            buf_inputs, buf_labels, _ = self.buffer.get_data(self.args.minibatch_size, transform=self.transform)
+            buf_inputs, buf_labels = self.future_buffer.get_data(self.args.minibatch_size, transform=self.transform)
             erace_loss = self.loss(self.net(buf_inputs), buf_labels)
             wandb_log['erace_loss'] = erace_loss.item()
             loss += erace_loss * self.args.erace_weight
