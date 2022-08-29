@@ -1,10 +1,13 @@
-import torch
-from torch.functional import F
-from torch.utils.data import DataLoader
+# Copyright 2020-present, Pietro Buzzega, Matteo Boschini, Angelo Porrello, Davide Abati, Simone Calderara.
+# All rights reserved.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 
+import torch
 from utils.buffer import Buffer
-from utils.args import *
+from torch.nn import functional as F
 from models.utils.continual_model import ContinualModel
+from utils.args import *
 from datasets import get_dataset
 import numpy as np
 from utils.spectral_analysis import calc_cos_dist, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs, calc_ADL_heat
@@ -16,19 +19,23 @@ import os
 
 def get_parser() -> ArgumentParser:
     parser = ArgumentParser(description='Continual learning via'
-                                        ' Experience Replay ACE with Replay of something else.')
+                                        ' Dark Experience Replay++ puls egin-mess.')
     add_management_args(parser)     # --wandb, --custom_log, --save_checks
     add_experiment_args(parser)     # --dataset, --model, --lr, --batch_size, --n_epochs
     add_rehearsal_args(parser)      # --minibatch_size, --buffer_size
+    parser.add_argument('--alpha', type=float, required=True,
+                        help='Penalty weight.')
+    parser.add_argument('--beta', type=float, required=True,
+                        help='Penalty weight.')
+
     parser.add_argument('--grad_clip', default=0, type=float, help='Clip the gradient.')
     parser.add_argument('--rep_minibatch', type=int, default=-1,
                         help='Size of pre-dataset minibatch replay (for x, lats and dists).')
     parser.add_argument('--replay_mode', type=str, required=True, help='What you replay.',
-                        choices=['none', 'features', 'dists', 'graph', 'laplacian', 'evec', 'fmap', 'eval',  'egap',
+                        choices=['none', 'features', 'dists', 'graph', 'laplacian', 'evec', 'fmap', 'eval', 'egap',
                                  'fmeval-0101', 'fmeval-0110', 'fmeval-1001', 'fmeval-1010',
                                  'evalgap', 'evalgap2', 'egap2'])
 
-    parser.add_argument('--erace_weight', type=float, default=1., help='Weight of erace.')
     parser.add_argument('--replay_weight', type=float, required=True, help='Weight of replay.')
 
     parser.add_argument('--graph_sym', action='store_true',
@@ -42,8 +49,8 @@ def get_parser() -> ArgumentParser:
     return parser
 
 
-class ErACEReplay(ContinualModel):
-    NAME = 'er_ace_replay'
+class DerppReplay(ContinualModel):
+    NAME = 'derpp_replay'
     COMPATIBILITY = ['class-il', 'domain-il', 'task-il', 'general-continual']
 
     def __init__(self, backbone, loss, args, transform):
@@ -54,7 +61,7 @@ class ErACEReplay(ContinualModel):
             args.replay_weight = 0
         if args.replay_mode not in ['graph', 'laplacian']:
             args.graph_sym = True
-        super(ErACEReplay, self).__init__(backbone, loss, args, transform)
+        super(DerppReplay, self).__init__(backbone, loss, args, transform)
 
         self.task = 0
         dataset = get_dataset(args)
@@ -62,7 +69,6 @@ class ErACEReplay(ContinualModel):
         self.N_CLASSES_PER_TASK = dataset.N_CLASSES_PER_TASK
         self.dataset_name = dataset.NAME
         self.N_CLASSES = self.N_TASKS * self.N_CLASSES_PER_TASK
-        self.seen_so_far = torch.tensor([], dtype=torch.long, device=self.device)
 
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.future_buffer = Buffer(self.args.buffer_size, self.device)
@@ -73,7 +79,7 @@ class ErACEReplay(ContinualModel):
         self.temp_log = {}
 
     def get_name(self):
-        name = 'Erace' + self.args.replay_mode.capitalize()
+        name = 'Derpp' + self.args.replay_mode.capitalize()
         if self.args.graph_sym and self.args.replay_mode == 'graph':
             name += 'Sym'
         if self.args.cos_dist:
@@ -87,13 +93,13 @@ class ErACEReplay(ContinualModel):
             return torch.tensor(0., dtype=torch.float, device=self.device)
         if self.args.rep_minibatch == self.args.buffer_size:
             if self.args.replay_mode in ['egap', 'egap2']:
-                inputs, labels = self.future_buffer.get_all_data(self.transform)
+                inputs, labels, _ = self.future_buffer.get_all_data(self.transform)
                 features1 = self.net.features(inputs).detach()
             else:
                 inputs, labels, features1 = self.buffer.get_all_data(self.transform)
         else:
             if self.args.replay_mode in ['egap', 'egap2']:
-                inputs, labels = self.future_buffer.get_data(self.args.rep_minibatch, self.transform)
+                inputs, labels, _ = self.future_buffer.get_data(self.args.rep_minibatch, self.transform)
                 features1 = self.net.features(inputs).detach()
             else:
                 inputs, labels, features1 = self.buffer.get_data(self.args.rep_minibatch, self.transform)
@@ -163,56 +169,53 @@ class ErACEReplay(ContinualModel):
                               torch.diag(evals[1]) @ (evects[codes[2]].T @ evects[codes[3]]))
 
     def observe(self, inputs, labels, not_aug_inputs):
-        wandb_log = {'loss': None, 'class_loss': None, 'erace_loss': None, 'replay_loss': None, 'task': self.task}
+        wandb_log = {'loss': None, 'class_loss': None, 'derpp_loss': None, 'replay_loss': None, 'task': self.task}
 
         self.opt.zero_grad()
-        # with torch.no_grad():
-        #     self.net.eval()
-        #     sploss = self.get_replay_loss()
-        #     self.net.train()
+        outputs = self.net(inputs)
+        loss = self.loss(outputs, labels)
+        wandb_log['class_loss'] = loss.item()
 
-        present = labels.unique()
-        self.seen_so_far = torch.cat([self.seen_so_far, present]).unique()
-        logits = self.net(inputs)
-        mask = torch.zeros_like(logits)
-        mask[:, present] = 1
-        if self.seen_so_far.max() < (self.N_CLASSES - 1):
-            mask[:, self.seen_so_far.max():] = 1
-        if self.task > 0:
-            logits = logits.masked_fill(mask == 0, torch.finfo(logits.dtype).min)
 
-        class_loss = self.loss(logits, labels)
-        wandb_log['class_loss'] = class_loss.item()
-        loss = class_loss
+        if not self.future_buffer.is_empty():
+            buf_inputs, _, buf_logits = self.future_buffer.get_data(
+                self.args.minibatch_size, transform=self.transform)
+            buf_outputs = self.net(buf_inputs)
+            derpp_loss = self.args.alpha * F.mse_loss(buf_outputs, buf_logits)
+
+            buf_inputs, buf_labels, _ = self.future_buffer.get_data(
+                self.args.minibatch_size, transform=self.transform)
+            buf_outputs = self.net(buf_inputs)
+            derpp_loss += self.args.beta * self.loss(buf_outputs, buf_labels)
+            wandb_log['derpp_loss'] = derpp_loss.item()
+            loss += derpp_loss
+
         if self.task > 0 and self.args.buffer_size > 0:
-            # sample from buffer
-            buf_inputs, buf_labels = self.future_buffer.get_data(self.args.minibatch_size, transform=self.transform)
-            erace_loss = self.loss(self.net(buf_inputs), buf_labels)
-            wandb_log['erace_loss'] = erace_loss.item()
-            loss += erace_loss * self.args.erace_weight
-
             if self.args.rep_minibatch > 0 and self.args.replay_weight > 0:
                 replay_loss = self.get_replay_loss()
                 wandb_log['replay_loss'] = replay_loss.item()
                 loss += replay_loss * self.args.replay_weight
-
-        if self.args.buffer_size > 0:
-            self.future_buffer.add_data(examples=not_aug_inputs, labels=labels)
 
         wandb_log['loss'] = loss.item()
         loss.backward()
         # clip gradients
         if self.args.grad_clip > 0:
             torch.nn.utils.clip_grad_norm_(self.net.parameters(), self.args.grad_clip)
-
         self.opt.step()
+
+        if self.args.buffer_size > 0:
+            self.future_buffer.add_data(examples=not_aug_inputs,
+                                        labels=labels,
+                                        logits=outputs.data)
 
         # add temp_log to wblog
         for k, v in self.temp_log.items():
             wandb_log[k] = v
         self.temp_log = {}
         self.wblog({'training': wandb_log})
+
         return loss.item()
+
 
     def end_task(self, dataset):
         self.task += 1
@@ -222,8 +225,8 @@ class ErACEReplay(ContinualModel):
     @torch.no_grad()
     def sync_buffers(self):
         self.net.eval()
-        inputs, labels = self.future_buffer.get_all_data(self.transform)
-        no_aug_inputs, _ = self.future_buffer.get_all_data()
+        inputs, labels, _ = self.future_buffer.get_all_data(self.transform)
+        no_aug_inputs, _, _ = self.future_buffer.get_all_data()
         features = self.net.features(inputs)
         self.net.train()
 
