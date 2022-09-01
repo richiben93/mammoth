@@ -10,8 +10,9 @@ import numpy as np
 from utils.spectral_analysis import calc_cos_dist, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs, calc_ADL_heat
 from time import time
 from utils.conf import base_path
-from utils.wandbsc import WandbLogger
+from utils.wandbsc import WandbLogger, innested_vars
 import os
+import pickle
 
 
 def get_parser() -> ArgumentParser:
@@ -26,7 +27,7 @@ def get_parser() -> ArgumentParser:
     parser.add_argument('--replay_mode', type=str, required=True, help='What you replay.',
                         choices=['none', 'features', 'dists', 'graph', 'laplacian', 'evec', 'fmap', 'eval',  'egap',
                                  'fmeval-0101', 'fmeval-0110', 'fmeval-1001', 'fmeval-1010',
-                                 'evalgap', 'evalgap2', 'egap2'])
+                                 'evalgap', 'evalgap2', 'egap2', 'egap2-1', 'egap2+1'])
 
     parser.add_argument('--erace_weight', type=float, default=1., help='Weight of erace.')
     parser.add_argument('--replay_weight', type=float, required=True, help='Weight of replay.')
@@ -56,21 +57,9 @@ class ErACEReplay(ContinualModel):
             args.graph_sym = True
         super(ErACEReplay, self).__init__(backbone, loss, args, transform)
 
-        self.task = 0
-        dataset = get_dataset(args)
-        self.N_TASKS = dataset.N_TASKS
-        self.N_CLASSES_PER_TASK = dataset.N_CLASSES_PER_TASK
-        self.dataset_name = dataset.NAME
-        self.N_CLASSES = self.N_TASKS * self.N_CLASSES_PER_TASK
         self.seen_so_far = torch.tensor([], dtype=torch.long, device=self.device)
-
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.future_buffer = Buffer(self.args.buffer_size, self.device)
-
-        self.args.name = self.get_name()
-        self.wblog = WandbLogger(args, name=self.args.name, prj='rodo-super', entity='regaz')
-        self.log_results = []
-        self.temp_log = {}
 
     def get_name(self):
         name = 'Erace' + self.args.replay_mode.capitalize()
@@ -86,13 +75,13 @@ class ErACEReplay(ContinualModel):
         if self.args.replay_mode == 'none':
             return torch.tensor(0., dtype=torch.float, device=self.device)
         if self.args.rep_minibatch == self.args.buffer_size:
-            if self.args.replay_mode in ['egap', 'egap2']:
+            if self.args.replay_mode in ['egap', 'egap2', 'egap2-1', 'egap2+1']:
                 inputs, labels = self.future_buffer.get_all_data(self.transform)
                 features1 = self.net.features(inputs).detach()
             else:
                 inputs, labels, features1 = self.buffer.get_all_data(self.transform)
         else:
-            if self.args.replay_mode in ['egap', 'egap2']:
+            if self.args.replay_mode in ['egap', 'egap2', 'egap2-1', 'egap2+1']:
                 inputs, labels = self.future_buffer.get_data(self.args.rep_minibatch, self.transform)
                 features1 = self.net.features(inputs).detach()
             else:
@@ -127,7 +116,7 @@ class ErACEReplay(ContinualModel):
         evals1, evects1 = find_eigs(L1, n_pairs=self.args.fmap_dim)
         evals2, evects2 = find_eigs(L2, n_pairs=self.args.fmap_dim)
         gaps = evals2[1:] - evals2[:-1]
-        self.temp_log['egap'] = torch.argmax(gaps).item()
+        self.wb_log['egap'] = torch.argmax(gaps).item()
 
         if self.args.replay_mode == 'evec':
             return F.mse_loss(evects2, evects1)
@@ -146,6 +135,14 @@ class ErACEReplay(ContinualModel):
             n = self.N_CLASSES_PER_TASK * self.task
             return evals2[:n+1].sum() - evals2[n+1]
 
+        if self.args.replay_mode == 'egap2-1':
+            n = self.N_CLASSES_PER_TASK * self.task
+            return evals2[:n].sum() - evals2[n]
+
+        if self.args.replay_mode == 'egap2+1':
+            n = self.N_CLASSES_PER_TASK * self.task
+            return evals2[:n+2].sum() - evals2[n+2]
+
         if self.args.replay_mode == 'evalgap':
             n = self.N_CLASSES_PER_TASK * self.task
             return -gaps[n] + F.mse_loss(evals2[:n], evals1[:n])
@@ -163,8 +160,6 @@ class ErACEReplay(ContinualModel):
                               torch.diag(evals[1]) @ (evects[codes[2]].T @ evects[codes[3]]))
 
     def observe(self, inputs, labels, not_aug_inputs):
-        wandb_log = {'loss': None, 'class_loss': None, 'erace_loss': None, 'replay_loss': None, 'task': self.task}
-
         self.opt.zero_grad()
         # with torch.no_grad():
         #     self.net.eval()
@@ -182,36 +177,29 @@ class ErACEReplay(ContinualModel):
             logits = logits.masked_fill(mask == 0, torch.finfo(logits.dtype).min)
 
         class_loss = self.loss(logits, labels)
-        wandb_log['class_loss'] = class_loss.item()
+        self.wb_log['class_loss'] = class_loss.item()
         loss = class_loss
         if self.task > 0 and self.args.buffer_size > 0:
             # sample from buffer
             buf_inputs, buf_labels = self.future_buffer.get_data(self.args.minibatch_size, transform=self.transform)
             erace_loss = self.loss(self.net(buf_inputs), buf_labels)
-            wandb_log['erace_loss'] = erace_loss.item()
+            self.wb_log['erace_loss'] = erace_loss.item()
             loss += erace_loss * self.args.erace_weight
 
             if self.args.rep_minibatch > 0 and self.args.replay_weight > 0:
                 replay_loss = self.get_replay_loss()
-                wandb_log['replay_loss'] = replay_loss.item()
+                self.wb_log['replay_loss'] = replay_loss.item()
                 loss += replay_loss * self.args.replay_weight
 
         if self.args.buffer_size > 0:
             self.future_buffer.add_data(examples=not_aug_inputs, labels=labels)
 
-        wandb_log['loss'] = loss.item()
         loss.backward()
         # clip gradients
         if self.args.grad_clip > 0:
             torch.nn.utils.clip_grad_norm_(self.net.parameters(), self.args.grad_clip)
-
         self.opt.step()
 
-        # add temp_log to wblog
-        for k, v in self.temp_log.items():
-            wandb_log[k] = v
-        self.temp_log = {}
-        self.wblog({'training': wandb_log})
         return loss.item()
 
     def end_task(self, dataset):
@@ -230,43 +218,10 @@ class ErACEReplay(ContinualModel):
         self.buffer.empty()
         self.buffer.add_data(no_aug_inputs, labels=labels, logits=features)
 
-    def log_accs(self, accs):
-        cil_acc, til_acc = np.mean(accs, axis=1).tolist()
-
-        # running consolidation error
-        with torch.no_grad():
-            self.net.eval()
-            replay_error = self.get_replay_loss().item()
-            self.net.train()
-
-        log_obj = {
-            'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': replay_error,
-            **{f'Class-IL task-{i + 1}': acc for i, acc in enumerate(accs[0])},
-            **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])},
-            'task': self.task,
-        }
-        self.log_results.append(log_obj)
-        self.wblog({'testing': log_obj})
-        self.save_checkpoint()
-
-        # if self.task > 2 and self.args.save_checks:
-        #     self.end_training()
-        #     exit()
-
-        if self.task == self.N_TASKS:
-            self.end_training()
-
     def save_checkpoint(self):
-        if self.args.save_checks:
-            log_dir = os.path.join(base_path(), 'checkpoints', self.args.name)
-            if not os.path.exists(log_dir):
-                os.makedirs(log_dir)
-            torch.save(self.net.state_dict(), f'{log_dir}/task_{self.task}.pt')
-
-    def end_training(self):
-        if self.args.custom_log:
-            log_dir = os.path.join(base_path(), 'logs', self.dataset_name, self.NAME)
-            # obj = {**vars(self.args), 'results': self.log_results}
-            # self.print_logs(log_dir, obj, name='results')
-            obj = {**vars(self.args), 'results': self.log_results}
-            self.print_logs(log_dir, obj, name='results')
+        log_dir = super().save_checkpoint()
+        ## pickle the future_buffer
+        with open(os.path.join(log_dir, f'task_{self.task}_buffer.pkl'), 'wb') as f:
+            self.future_buffer.to('cpu')
+            pickle.dump(self.future_buffer, f)
+            self.future_buffer.to(self.device)

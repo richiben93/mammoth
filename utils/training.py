@@ -5,6 +5,7 @@
 
 import torch
 from utils.status import progress_bar, create_stash
+import numpy as np
 from utils.tb_logger import *
 from utils.loggers import *
 from utils.loggers import CsvLogger, DictxtLogger
@@ -122,6 +123,8 @@ def train(model: ContinualModel, dataset: ContinualDataset,
                     loss = model.observe(inputs, labels, not_aug_inputs)
 
                 progress_bar(i, len(train_loader), epoch, t, loss)
+                model.wblogger({'training': {'task': t, 'loss': loss, **model.wb_log}})
+                model.wb_log = {}
 
                 model_stash['batch_idx'] = i + 1
             model_stash['epoch_idx'] = epoch + 1
@@ -136,6 +139,22 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         mean_acc = np.mean(accs, axis=1)
         if hasattr(model, 'log_accs'):
             model.log_accs(accs)
+
+        cil_acc, til_acc = np.mean(accs, axis=1).tolist()
+        log_obj = {
+            'Class-IL mean': cil_acc, 'Task-IL mean': til_acc,
+            **{f'Class-IL task-{i + 1}': acc for i, acc in enumerate(accs[0])},
+            **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])},
+            'task': t,
+            **model.wb_log,
+        }
+        model.log_results.append(log_obj)
+        model.wblogger({'testing': log_obj})
+        if args.save_checks:
+            model.save_checkpoint()
+        if t == model.N_TASKS - 1 and args.custom_log:
+            model.save_logs()
+        model.wb_log = {}
 
         results.append(accs[0])
         results_mask_classes.append(accs[1])

@@ -26,6 +26,7 @@ from utils.training import train
 from utils.best_args import best_args
 from utils.conf import set_random_seed
 from utils import create_if_not_exists
+from utils.distributed import make_dp
 import torch
 
 import uuid
@@ -115,6 +116,9 @@ def main(args=None):
         import setproctitle
         setproctitle.setproctitle('{}_{}_{}'.format(args.model, args.buffer_size if 'buffer_size' in args else 0, args.dataset))
 
+    if args.distributed:
+        model.net = make_dp(model.net)
+        model.to('cuda:0')
     if isinstance(dataset, ContinualDataset):
         train(model, dataset, args)
     else:
