@@ -18,7 +18,7 @@ class BasicBlockPnn(BasicBlock):
     """
     The basic block of ResNet. Modified for PNN.
     """
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, return_prerelu=False) -> torch.Tensor:
         """
         Compute a forward pass.
         :param x: input tensor (batch_size, input_size)
