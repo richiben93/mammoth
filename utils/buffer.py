@@ -141,6 +141,9 @@ class Buffer:
                 ret_tuple += (attr,)
         return ret_tuple
 
+    def __len__(self):
+        return min(self.num_seen_examples, self.buffer_size)
+
     def empty(self) -> None:
         """
         Set all the tensors to None.
