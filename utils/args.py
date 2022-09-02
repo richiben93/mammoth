@@ -2,7 +2,7 @@
 # All rights reserved.
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
-
+from datetime import datetime
 from argparse import ArgumentParser
 from datasets import NAMES as DATASET_NAMES
 from models import get_all_models
@@ -25,6 +25,7 @@ def add_experiment_args(parser: ArgumentParser) -> None:
                         help='Batch size.')
     parser.add_argument('--n_epochs', type=int, required=True,
                         help='The number of epochs for each task.')
+    parser.add_argument('--pretrained_model', default=None, help='Starting model if you have a pretrained one.')
 
 
 def add_management_args(parser: ArgumentParser) -> None:
@@ -43,6 +44,8 @@ def add_management_args(parser: ArgumentParser) -> None:
                         help='Save checkpoints')
     parser.add_argument('--validation', action='store_true',
                         help='Test on the validation set')
+    parser.add_argument('--experiment_name', default='generic-experiment',
+                        help='Experiment name to log in wandb')
 
 
 def add_rehearsal_args(parser: ArgumentParser) -> None:
@@ -54,3 +57,16 @@ def add_rehearsal_args(parser: ArgumentParser) -> None:
                         help='The size of the memory buffer.')
     parser.add_argument('--minibatch_size', type=int, required=True,
                         help='The batch size of the memory buffer.')
+
+
+def add_aux_dataset_args(parser: ArgumentParser) -> None:
+    """
+    Adds the arguments used to load initial (pretrain) checkpoint
+    :param parser: the parser instance
+    """
+    parser.add_argument('--pre_epochs', type=int, default=200,
+                        help='pretrain_epochs.')
+    parser.add_argument('--pre_dataset', type=str, required=True,
+                        choices=['cifar100', 'tinyimgR', 'imagenet'])
+    parser.add_argument('--load_cp', type=str, default=f'/tmp/checkpoint_{datetime.now().timestamp()}.pth')
+    parser.add_argument('--stop_after_prep', action='store_true')
