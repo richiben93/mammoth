@@ -47,6 +47,7 @@ def add_management_args(parser: ArgumentParser) -> None:
                         help='Save checkpoints')
     parser.add_argument('--validation', action='store_true',
                         help='Test on the validation set')
+    parser.add_argument('--set_device', default=None, type=str)
 
 
 def add_rehearsal_args(parser: ArgumentParser) -> None:

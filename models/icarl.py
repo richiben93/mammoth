@@ -16,7 +16,6 @@ def get_parser() -> ArgumentParser:
     add_management_args(parser)
     add_experiment_args(parser)
     add_rehearsal_args(parser)
-    add_aux_dataset_args(parser)
 
     parser.add_argument('--wd_reg', type=float, required=True,
                         help='L2 regularization applied to the parameters.')
@@ -159,7 +158,7 @@ class ICarl(ContinualModel):
 
         self.opt.step()
 
-        return loss.item(), 0, 0, 0, 0
+        return loss.item()
 
     @staticmethod
     def binary_cross_entropy(pred, y):
@@ -199,25 +198,22 @@ class ICarl(ContinualModel):
         return loss
 
     def begin_task(self, dataset):
-        if self.current_task == 0:
-            self.load_initial_checkpoint()
-            self.reset_classifier()
 
-        denorm = dataset.get_denormalization_transform()
-        if denorm is None:
-            denorm = lambda x: x
+        # denorm = dataset.get_denormalization_transform()
+        # if denorm is None:
+        #     denorm = lambda x: x
         if self.current_task > 0:
             dataset.train_loader.dataset.targets = np.concatenate(
                 [dataset.train_loader.dataset.targets,
                  self.buffer.labels.cpu().numpy()[:self.buffer.num_seen_examples]])
             if type(dataset.train_loader.dataset.data) == torch.Tensor:
                 dataset.train_loader.dataset.data = torch.cat(
-                    [dataset.train_loader.dataset.data, torch.stack([denorm(
+                    [dataset.train_loader.dataset.data, torch.stack([(
                         self.buffer.examples[i].type(torch.uint8).cpu())
                         for i in range(self.buffer.num_seen_examples)]).squeeze(1)])
             else:
                 dataset.train_loader.dataset.data = np.concatenate(
-                    [dataset.train_loader.dataset.data, torch.stack([(denorm(
+                    [dataset.train_loader.dataset.data, torch.stack([((
                         self.buffer.examples[i] * 255).type(torch.uint8).cpu())
                                                                      for i in range
                                                                      (self.buffer.num_seen_examples)]).numpy().swapaxes(
@@ -246,5 +242,5 @@ class ICarl(ContinualModel):
                  if labels[i].cpu() == _y]
             ).to(self.device)
             with bn_track_stats(self, False):
-                class_means.append(self.net(x_buf, returnt='features').mean(0).flatten())
+                class_means.append(self.net.features(x_buf).mean(0).flatten())
         self.class_means = torch.stack(class_means)

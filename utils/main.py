@@ -53,6 +53,10 @@ def parse_args():
     torch.set_num_threads(4)
     add_management_args(parser)
     args = parser.parse_known_args()[0]
+
+    if args.set_device is not None:
+        os.environ['CUDA_VISIBLE_DEVICES'] = args.set_device
+
     mod = importlib.import_module('models.' + args.model)
 
     if args.load_best_args:
@@ -122,9 +126,9 @@ def main(args=None):
         setproctitle.setproctitle(
             '{}_{}_{}'.format(args.model, args.buffer_size if 'buffer_size' in args else 0, args.dataset))
 
-    if args.distributed:
-        model.net = make_dp(model.net)
-        model.to('cuda:0')
+    # if args.distributed:
+    #     model.net = make_dp(model.net)
+    #     model.to('cuda:0')
     if isinstance(dataset, ContinualDataset):
         train(model, dataset, args)
     else:
