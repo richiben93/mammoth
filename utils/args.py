@@ -25,7 +25,6 @@ def add_experiment_args(parser: ArgumentParser) -> None:
                         help='Batch size.')
     parser.add_argument('--n_epochs', type=int, required=True,
                         help='The number of epochs for each task.')
-    parser.add_argument('--pretrained_model', default=None, help='Starting model if you have a pretrained one.')
 
 
 def add_management_args(parser: ArgumentParser) -> None:
@@ -38,14 +37,16 @@ def add_management_args(parser: ArgumentParser) -> None:
                         help='Enable csv logging')
     parser.add_argument('--wandb', action='store_true',
                         help='Enable wandb logging')
+    parser.add_argument('--wb_prj', type=str, default='rodo-super',
+                        help='Wandb project')
+    parser.add_argument('--wb_entity', type=str, default='regaz',
+                        help='Watdb entity')
     parser.add_argument('--custom_log', action='store_true',
                         help='Enable log (custom for each model, must be implemented)')
     parser.add_argument('--save_checks', action='store_true',
                         help='Save checkpoints')
     parser.add_argument('--validation', action='store_true',
                         help='Test on the validation set')
-    parser.add_argument('--experiment_name', default='generic-experiment',
-                        help='Experiment name to log in wandb')
 
 
 def add_rehearsal_args(parser: ArgumentParser) -> None:

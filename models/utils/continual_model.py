@@ -9,6 +9,11 @@ import torch
 import torchvision
 from argparse import Namespace
 from utils.conf import get_device
+from datasets import get_dataset
+from utils.wandbsc import WandbLogger, innested_vars
+from utils.conf import base_path
+import os
+import pickle
 
 
 class ContinualModel(nn.Module):
@@ -29,6 +34,21 @@ class ContinualModel(nn.Module):
         self.opt = SGD(self.net.parameters(), lr=self.args.lr)
         self.device = get_device()
 
+        dataset = get_dataset(args)
+        self.N_TASKS = dataset.N_TASKS
+        self.N_CLASSES_PER_TASK = dataset.N_CLASSES_PER_TASK
+        self.dataset_name = dataset.NAME
+        self.N_CLASSES = self.N_TASKS * self.N_CLASSES_PER_TASK
+
+        self.args.name = self.get_name()
+        self.wblogger = WandbLogger(self.args, name=self.args.name, prj=self.args.wb_prj, entity=self.args.wb_entity)
+        self.log_results = []
+        self.wb_log = {}
+        self.task = 0
+
+    def get_name(self):
+        return self.NAME
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Computes a forward pass.
@@ -48,3 +68,31 @@ class ContinualModel(nn.Module):
         :return: the value of the loss function
         """
         pass
+
+    def end_task(self, dataset):
+        self.task += 1
+
+    def log_accs(self, accs):
+        pass
+
+    def save_checkpoint(self):
+        log_dir = os.path.join(base_path(), 'checkpoints', self.dataset_name, f'{self.args.name}-{self.wblogger.run_id}')
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        if self.task == 0:
+            with open(os.path.join(log_dir, 'args.pyd'), 'w') as f:
+                f.write(str(innested_vars(self.args)))
+        torch.save(self.net.state_dict(), f'{log_dir}/task_{self.task}.pt')
+        return log_dir
+
+    def save_logs(self):
+        log_dir = os.path.join(base_path(), 'logs', self.dataset_name, self.args.name)
+        # obj = {**vars(self.args), 'results': self.log_results}
+        # self.print_logs(log_dir, obj, name='results')
+        obj = {**innested_vars(self.args), 'results': self.log_results}
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        filename = f'{self.wblogger.run_id}.pyd'
+        with open(os.path.join(log_dir, filename), 'a') as f:
+            f.write(str(obj) + '\n')
+        return log_dir
