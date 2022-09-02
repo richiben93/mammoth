@@ -40,7 +40,9 @@ def base_path_dataset() -> str:
     """
     Returns the base bath where to log accuracies and tensorboard data.
     """
-    return '/nas/softechict-nas-2/efrascaroli/datasets/' if 'SLURM_CONF' in os.environ else './data/'
+    uname = os.getlogin()
+    return f'/tmp/{uname}/mammoth-datasets/'
+    # return '/nas/softechict-nas-2/efrascaroli/datasets/' if 'SLURM_CONF' in os.environ else './data/'
     # return '/scratch/efrascaroli/mammoth/datasets' if 'SLURM_CONF' in os.environ else './data/'
 
 
