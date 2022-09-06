@@ -13,6 +13,19 @@ from utils.args import *
 from models.utils.continual_model import ContinualModel
 from utils.no_bn import bn_track_stats
 import numpy as np
+from models.icarl import baguette_fill_buffer
+from models.utils.podnet_utils import *
+
+def get_parser() -> ArgumentParser:
+    parser = ArgumentParser(description='Continual Learning via iCaRL.')
+
+    add_management_args(parser)
+    add_experiment_args(parser)
+    add_rehearsal_args(parser)
+
+    parser.add_argument('--wd_reg', type=float, required=False,
+                        help='L2 regularization applied to the parameters.')
+    return parser
 
 
 class Podnet(ContinualModel):
@@ -33,15 +46,19 @@ class Podnet(ContinualModel):
         self.current_task = 0
         self.num_classes = self.dataset.N_CLASSES_PER_TASK * self.dataset.N_TASKS
         self._examplars = {}
+        self._metrics = {"nca": 0., "flat": 0., "pod": 0.}
         self._means = None
 
-        self._old_model = None
+        self.old_net = None
         self._nca_config = {'margin': 0.6,
                             'scale': 1.,
                             'exclude_pos_denominator': True}
-        self._classifier_config = {'type': 'cosine',
+        self.classifier_config = {'type': 'cosine',
                                    'proxy_per_class': 10,
                                    'distance': 'neg_stable_cosine_distance', }
+        self.classifier_config = {'type': 'cosine',
+                                   'proxy_per_class': 10,
+                                   'distance': 'neg_stable_cosine_distance', 'scaling': 3.0}
 
         self.postprocessor_config = {'type': 'learned_scaling',
                                      'initial_value': 1.0
@@ -53,16 +70,22 @@ class Podnet(ContinualModel):
         self._weight_generation = {'type': 'imprinted',
                                    'multi_class_diff': 'kmeans'}
 
-    def end_task(self, inc_dataset):
-        if self._gradcam_distil:
-            self._network.zero_grad()
-            self._network.unset_gradcam_hook()
-            self._old_model = self._network.copy().eval().to(self._device)
-            self._network.on_task_end()
+        old_classifier = self.net.classifier
+        self.net.classifier = CosineClassifier(
+            old_classifier.in_features, device=self.device, **self.classifier_config
+            )
+        del old_classifier
 
-        else:
-            self._old_model = self.net.copy().freeze().to(self._device)
-            self.net.on_task_end()
+        self.opt = torch.optim.SGD(self.net.parameters(), lr=self.args.lr)
+
+
+    def end_task(self, inc_dataset):
+        self.old_net = deepcopy(self.net.eval())
+        self.net.train()
+        with torch.no_grad():
+            baguette_fill_buffer(self, self.buffer, inc_dataset, self.current_task)
+        self.current_task += 1
+        self.class_means = None
 
     def forward(self, x):
         if self.class_means is None:
@@ -70,17 +93,26 @@ class Podnet(ContinualModel):
                 self.compute_class_means()
                 self.class_means = self.class_means.squeeze()
 
-        # feats = self.net.features(x).squeeze()
-        try:
-            feats = self.net.features(x).float().squeeze()
-        except:
-            _, feats = self.net(x, returnt='both').float().squeeze()
+        feats = self.net(x).float()
+        return feats
 
-        feats = feats.reshape(feats.shape[0], -1)
-        feats = feats.unsqueeze(1)
-
-        pred = (self.class_means.unsqueeze(0) - feats).pow(2).sum(2)
-        return -pred
+    def compute_class_means(self) -> None:
+        """
+        Computes a vector representing mean features for each class.
+        """
+        # This function caches class means
+        transform = self.dataset.get_normalization_transform()
+        class_means = []
+        examples, labels, _ = self.buffer.get_all_data(transform)
+        for _y in self.classes_so_far:
+            x_buf = torch.stack(
+                [examples[i]
+                 for i in range(0, len(examples))
+                 if labels[i].cpu() == _y]
+            ).to(self.device)
+            with bn_track_stats(self, False):
+                class_means.append(self.net.features(x_buf).mean(0).flatten())
+        self.class_means = torch.stack(class_means)
 
     def observe(self, inputs, labels, not_aug_inputs, logits=None, epoch=None):
 
@@ -102,17 +134,18 @@ class Podnet(ContinualModel):
     def get_loss(self, inputs, targets):
 
         outputs = self.net.forward_all(inputs)
-        features, logits, atts = outputs["raw_features"], outputs["logits"], outputs["attention"]
+        features, pre_logits, atts = outputs["raw_features"], outputs["features"], outputs["attention"]
 
+        logits = self.net.classifier(pre_logits)
         # donnow why this is necessary
         # if self._post_processing_type is None:
         #     scaled_logits = self._network.post_process(logits)
         # else:
         #     scaled_logits = logits * self._post_processing_type
 
-        if self._old_model is not None:
+        if self.old_net is not None:
             with torch.no_grad():
-                old_outputs = self._old_model.forward_all(inputs)
+                old_outputs = self.old_net.forward_all(inputs)
                 old_features = old_outputs["raw_features"]
                 old_atts = old_outputs["attention"]
 
@@ -126,24 +159,24 @@ class Podnet(ContinualModel):
             class_weights=self._class_weights,
             **nca_config
         )
-        self._metrics["nca"] += loss.item()
+        self._metrics["nca"] = loss.item()
 
         # --------------------
         # Distillation losses:
         # --------------------
 
-        if self._old_model is not None:
+        if self.old_net is not None:
             if self._pod_flat_config:
                 if self._pod_flat_config["scheduled_factor"]:
                     factor = self._pod_flat_config["scheduled_factor"] * math.sqrt(
-                        self._n_classes / self._task_size #fixme
+                        self._n_classes / self._task_size  # fixme
                     )
                 else:
                     factor = self._pod_flat_config.get("factor", 1.)
 
                 pod_flat_loss = factor * embeddings_similarity(old_features, features)
                 loss += pod_flat_loss
-                self._metrics["flat"] += pod_flat_loss.item()
+                self._metrics["flat"] = pod_flat_loss.item()
 
             if self._pod_spatial_config:
                 if self._pod_spatial_config.get("scheduled_factor", False):
@@ -160,71 +193,42 @@ class Podnet(ContinualModel):
                     **self._pod_spatial_config
                 )
                 loss += pod_spatial_loss
-                self._metrics["pod"] += pod_spatial_loss.item()
+                self._metrics["pod"] = pod_spatial_loss.item()
 
-                self._old_model.zero_grad()
+                self.old_net.zero_grad()
                 self._network.zero_grad()
 
         return loss
 
     def _gen_weights(self):
+        self._task = task_info["task"]
+        self._total_n_classes = task_info["total_n_classes"]
+        self._task_size = task_info["increment"]
+        self._n_train_data = task_info["n_train_data"]
+        self._n_test_data = task_info["n_test_data"]
+        self._n_tasks = task_info["max_task"]
         if self._weight_generation:
             add_new_weights(
-                self._network, self._weight_generation if self.current_task != 0 else "basic",
-                self._n_classes, self._task_size, self.inc_dataset
+                self.net, self._weight_generation if self.current_task != 0 else "basic",
+                self.N_CLASSES, self._task_size, self.inc_dataset
             )
 
-    def _before_task(self, train_loader, val_loader):
+    def begin_task(self, dataset):
         self._gen_weights()
-        self._n_classes += self._task_size
-        print("Now {} examplars per class.".format(self._memory_per_class))
-
-        if self._groupwise_factors and isinstance(self._groupwise_factors, dict):
-            if self._groupwise_factors_bis and self._task > 0:
-                print("Using second set of groupwise lr.")
-                groupwise_factor = self._groupwise_factors_bis
+        if self.current_task > 0:
+            dataset.train_loader.dataset.targets = np.concatenate(
+                [dataset.train_loader.dataset.targets,
+                 self.buffer.labels.cpu().numpy()[:self.buffer.num_seen_examples]])
+            if type(dataset.train_loader.dataset.data) == torch.Tensor:
+                dataset.train_loader.dataset.data = torch.cat(
+                    [dataset.train_loader.dataset.data, torch.stack([(
+                        self.buffer.examples[i].type(torch.uint8).cpu())
+                        for i in range(self.buffer.num_seen_examples)]).squeeze(1)])
             else:
-                groupwise_factor = self._groupwise_factors
-
-            params = []
-            for group_name, group_params in self._network.get_group_parameters().items():
-                if group_params is None or group_name == "last_block":
-                    continue
-                factor = groupwise_factor.get(group_name, 1.0)
-                if factor == 0.:
-                    continue
-                params.append({"params": group_params, "lr": self._lr * factor})
-                print(f"Group: {group_name}, lr: {self._lr * factor}.")
-        elif self._groupwise_factors == "ucir":
-            params = [
-                {
-                    "params": self._network.convnet.parameters(),
-                    "lr": self._lr
-                },
-                {
-                    "params": self._network.classifier.new_weights,
-                    "lr": self._lr
-                },
-            ]
-        else:
-            params = self._network.parameters()
-
-        # self._optimizer = factory.get_optimizer(params, self._opt_name, self._lr, self.weight_decay)
-        #
-        # self._scheduler = factory.get_lr_scheduler(
-        #     self._scheduling,
-        #     self._optimizer,
-        #     nb_epochs=self._n_epochs,
-        #     lr_decay=self._lr_decay,
-        #     task=self.current_task,
-        # )
-
-        if self._class_weights_config:
-            self._class_weights = torch.tensor(
-                get_class_weights(train_loader.dataset, **self._class_weights_config)
-            ).to(self._device)
-        else:
-            self._class_weights = None
+                dataset.train_loader.dataset.data = np.concatenate(
+                    [dataset.train_loader.dataset.data, torch.stack([((self.buffer.examples[i] * 255).type(
+                        torch.uint8).cpu()) for i in range(self.buffer.num_seen_examples)]).numpy().swapaxes(
+                        1, 3)])
 
 
 #######WEIGHTS##############
@@ -242,6 +246,7 @@ def get_class_weights(dataset, log=False, **kwargs):
         weights = np.log(weights)
 
     return np.clip(weights, a_min=1., a_max=None)
+
 
 def extract_features(model, loader):
     targets, features = [], []
@@ -264,59 +269,12 @@ def extract_features(model, loader):
 
 
 def add_new_weights(network, weight_generation, current_nb_classes, task_size, inc_dataset):
-    if isinstance(weight_generation, str):
-        warnings.warn("Use a dict for weight_generation instead of str", DeprecationWarning)
-        weight_generation = {"type": weight_generation}
+    print("Generating imprinted weights")
 
-    if weight_generation["type"] == "imprinted":
-        print("Generating imprinted weights")
-
-        network.add_imprinted_classes(
-            list(range(current_nb_classes, current_nb_classes + task_size)), inc_dataset,
-            **weight_generation
-        )
-    elif weight_generation["type"] == "embedding":
-        print("Generating embedding weights")
-
-        mean_embeddings = []
-        for class_index in range(current_nb_classes, current_nb_classes + task_size):
-            _, loader = inc_dataset.get_custom_loader([class_index])
-            features, _ = extract_features(network, loader)
-            features = features / np.linalg.norm(features, axis=-1)[..., None]
-
-            mean = np.mean(features, axis=0)
-            if weight_generation.get("proxy_per_class", 1) == 1:
-                mean_embeddings.append(mean)
-            else:
-                std = np.std(features, axis=0, ddof=1)
-                mean_embeddings.extend(
-                    [
-                        np.random.normal(loc=mean, scale=std)
-                        for _ in range(weight_generation.get("proxy_per_class", 1))
-                    ]
-                )
-
-        network.add_custom_weights(np.stack(mean_embeddings))
-    elif weight_generation["type"] == "basic":
-        network.add_classes(task_size)
-    elif weight_generation["type"] == "ghosts":
-        features, targets = weight_generation["ghosts"]
-        features = features.cpu().numpy()
-        targets = targets.cpu().numpy()
-
-        weights = []
-        for class_id in range(current_nb_classes, current_nb_classes + task_size):
-            indexes = np.where(targets == class_id)[0]
-
-            class_features = features[indexes]
-            if len(class_features) == 0:
-                raise Exception(f"No ghost class_id={class_id} for weight generation!")
-            weights.append(np.mean(class_features, axis=0))
-
-        weights = torch.tensor(np.stack(weights)).float()
-        network.add_custom_weights(weights, ponderate=weight_generation.get("ponderate"))
-    else:
-        raise ValueError("Unknown weight generation type {}.".format(weight_generation["type"]))
+    network.add_imprinted_classes(
+        list(range(current_nb_classes, current_nb_classes + task_size)), inc_dataset,
+        **weight_generation
+    )
 
 
 ########## LOSSES ##########

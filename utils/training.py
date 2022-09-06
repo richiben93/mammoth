@@ -92,7 +92,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
     for t in range(dataset.N_TASKS):
         model.net.train()
         _, _ = dataset_copy.get_data_loaders()
-    if model.NAME != 'icarl' and model.NAME != 'pnn' and model.NAME != 'cpn'and not model.NAME.startswith('icarl'):
+    if model.NAME not in  ('icarl', 'podnet') and model.NAME != 'pnn' and model.NAME != 'cpn'and not model.NAME.startswith('icarl'):
         random_results_class, random_results_task = evaluate(model, dataset_copy)
 
     print(file=sys.stderr)
