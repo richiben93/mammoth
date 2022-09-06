@@ -25,6 +25,8 @@ def add_experiment_args(parser: ArgumentParser) -> None:
                         help='Batch size.')
     parser.add_argument('--n_epochs', type=int, required=True,
                         help='The number of epochs for each task.')
+    parser.add_argument('--distributed', action='store_true',
+                        help='Use multiple gpus.')
 
 
 def add_management_args(parser: ArgumentParser) -> None:

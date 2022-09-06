@@ -126,9 +126,9 @@ def main(args=None):
         setproctitle.setproctitle(
             '{}_{}_{}'.format(args.model, args.buffer_size if 'buffer_size' in args else 0, args.dataset))
 
-    # if args.distributed:
-    #     model.net = make_dp(model.net)
-    #     model.to('cuda:0')
+    if args.distributed:
+        model.net = make_dp(model.net)
+        model.to('cuda:0')
     if isinstance(dataset, ContinualDataset):
         train(model, dataset, args)
     else:
