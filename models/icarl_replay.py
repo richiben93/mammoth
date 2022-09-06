@@ -123,10 +123,12 @@ class ICarlReplay(ReplayModel):
         # self.buffer = Buffer(self.args.buffer_size, self.device)
         self.eye = torch.eye(self.N_CLASSES_PER_TASK * self.N_TASKS, device=self.device)
 
-
         self.class_means = None
         self.old_net = None
         self.num_classes = self.N_CLASSES_PER_TASK * self.N_TASKS
+
+    def get_name(self):
+        return 'ICarl' + self.get_name_extension()
 
     def forward(self, x):
         if self.class_means is None:
