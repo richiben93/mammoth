@@ -29,6 +29,7 @@ class Imagenet100(Dataset):
                 target_transform: transforms=None, download: bool=False) -> None:
         self.not_aug_transform = transforms.Compose([transforms.Resize(256),
         transforms.CenterCrop(224),transforms.ToTensor()])
+            
         self.root = root
         self.train = train
         self.transform = transform
@@ -168,7 +169,7 @@ class SequentialImagenet100(ContinualDataset):
             test_dataset = Imagenet100(base_path_dataset() + 'IMGNET100',
                                         train=False, download=True, transform=test_transform)
 
-        train, test = store_masked_loaders(train_dataset, test_dataset, self)
+        train, test = store_masked_loaders(train_dataset, test_dataset, self, dali=True)
         return train, test
 
     @staticmethod
