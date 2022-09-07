@@ -21,7 +21,7 @@ class no_update_bn_stats:
 
 
 class bn_track_stats:
-    def __init__(self, module: nn.Module, condition=True):
+    def __init__(self, module: nn.Module, condition: bool):
         self.module = module
         self.enable = condition
 
