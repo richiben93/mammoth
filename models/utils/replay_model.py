@@ -19,7 +19,7 @@ class ReplayModel(ContinualModel):
         parser.add_argument('--replay_mode', type=str, required=True, help='What you replay.',
                             choices=['none', 'features', 'dists', 'graph', 'laplacian', 'evec', 'fmap', 'eval', 'egap',
                                      'fmeval-0101', 'fmeval-0110', 'fmeval-1001', 'fmeval-1010',
-                                     'evalgap', 'evalgap2', 'egap2', 'egap2-1', 'egap2+1'])
+                                     'evalgap', 'evalgap2', 'egap2', 'egap2-1', 'egap2+1', 'egap3', 'egap2m'])
 
         parser.add_argument('--replay_weight', type=float, required=True, help='Weight of replay.')
 
@@ -63,14 +63,14 @@ class ReplayModel(ContinualModel):
         if self.args.replay_mode == 'none':
             return torch.tensor(0., dtype=torch.float, device=self.device)
         if self.args.rep_minibatch == self.args.buffer_size:
-            if self.args.replay_mode in ['egap', 'egap2', 'egap2-1', 'egap2+1']:
+            if self.args.replay_mode in ['egap', 'egap2', 'egap2-1', 'egap2+1', 'egap3', 'egap2m']:
                 buffer_data = self.buffer.get_all_data(self.transform)
                 inputs, labels = buffer_data[0], buffer_data[1]
                 features1 = self.net.features(inputs).detach()
             else:
                 inputs, labels, features1 = self.fixed_buffer.get_all_data(self.transform)
         else:
-            if self.args.replay_mode in ['egap', 'egap2', 'egap2-1', 'egap2+1']:
+            if self.args.replay_mode in ['egap', 'egap2', 'egap2-1', 'egap2+1', 'egap3', 'egap2m']:
                 buffer_data = self.buffer.get_data(self.args.rep_minibatch, self.transform)
                 inputs, labels = buffer_data[0], buffer_data[1]
                 features1 = self.net.features(inputs).detach()
@@ -124,6 +124,14 @@ class ReplayModel(ContinualModel):
         if self.args.replay_mode == 'egap2':
             n = self.N_CLASSES_PER_TASK * self.task
             return evals2[:n+1].sum() - evals2[n+1]
+
+        if self.args.replay_mode == 'egap2m':
+            n = self.N_CLASSES_PER_TASK * self.task
+            return evals2[:n+1].mean() - evals2[n+1]
+
+        if self.args.replay_mode == 'egap3':
+            n = self.N_CLASSES_PER_TASK * self.task
+            return evals2[:n].mean()
 
         if self.args.replay_mode == 'egap2-1':
             n = self.N_CLASSES_PER_TASK * self.task

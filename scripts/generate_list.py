@@ -5,22 +5,28 @@ from random import randint
 
 from typing import List
 
+#--dataset seq-cifar100-10x10 --wandb --model er_ace_replay --lr 0.1 --minibatch_size 64 --batch_size 64 --n_epochs 20 --buffer_size 2000 --rep_minibatch 128 --knn_laplace 20 --replay_weight 0.1      --replay_mode none
+#--dataset seq-cifar100-10x10 --wandb --model er_ace_replay --lr 0.1 --minibatch_size 64 --batch_size 64 --n_epochs 20 --buffer_size 2000 --rep_minibatch 128 --knn_laplace 5  --replay_weight 0.001    --replay_mode egap2      --fmap_dim 100   --cos_dist
+#--dataset seq-cifar100-10x10 --wandb --model er_ace_replay --lr 0.1 --minibatch_size 64 --batch_size 64 --n_epochs 20 --buffer_size 2000 --rep_minibatch 128 --knn_laplace 5  --replay_weight 0.001    --replay_mode egap2      --fmap_dim 100
+#--dataset seq-cifar100-10x10 --wandb --model er_ace_replay --lr 0.1 --minibatch_size 64 --batch_size 64 --n_epochs 20 --buffer_size 2000 --rep_minibatch 128 --knn_laplace 5  --replay_weight 0.01     --replay_mode egap2      --fmap_dim 100   --cos_dist
+#--dataset seq-cifar100-10x10 --wandb --model er_ace_replay --lr 0.1 --minibatch_size 64 --batch_size 64 --n_epochs 20 --buffer_size 2000 --rep_minibatch 128 --knn_laplace 5  --replay_weight 0.01     --replay_mode egap2      --fmap_dim 100
+
 grid = {
-    "dataset": ["seq-cifar10"],  # "seq-cifar100-10x10"],
+    "dataset": ["seq-cifar100-10x10"],  # "seq-cifar100-10x10"],
     "wandb": [True],
     "model": ["er_ace_replay"],
-    "batch_size": ["128"],
+    "batch_size": ["64"],
     "lr": ["0.1"],
     "n_epochs": ["20"],
     "buffer_size": ["2000"],
-    "minibatch_size": ["128"],
+    "minibatch_size": ["64"],
     "rep_minibatch": ["512"],
-    "heat_kernel": [False, True],
-    "knn_laplace": ["10"],
-    "fmap_dim": ["20"],
-    "replay_mode": ["eval", "evectors"],
+    "heat_kernel": [],
+    "knn_laplace": ["20"],
+    "fmap_dim": ["100"],
+    "replay_mode": ["egap3"],
     "cos_dist": [False, True],
-    "replay_weight": ["0.1"],
+    "replay_weight": ["0.1", "0.01", "0.001"],
     "save_checks": [],
 }
 
@@ -78,7 +84,7 @@ else:
             prev_lines = [line for line in f.readlines()]
         with open(args.output, 'w') as f:
             for line in prev_lines:
-                f.write(line if line.startswith("#") else "#"+line)
+                f.write(line if line.startswith("#") or line == '' else "#"+line)
     with open(args.output, 'a') as f:
         f.write("\n".join(lines))
         f.write("\n")
