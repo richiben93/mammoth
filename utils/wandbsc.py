@@ -20,6 +20,6 @@ class WandbLogger:
                 name += f'-{self.run_id}'
             wandb.init(project=prj, entity=entity, config=innested_vars(args), name=name)
 
-    def __call__(self, obj: any):
+    def __call__(self, obj: any, **kwargs):
         if wandb.run:
-            wandb.log(obj)
+            wandb.log(obj, **kwargs)
