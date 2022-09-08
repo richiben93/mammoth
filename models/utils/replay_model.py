@@ -8,6 +8,8 @@ from models.utils.continual_model import ContinualModel
 from utils.spectral_analysis import calc_cos_dist, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs, calc_ADL_heat
 import os
 import pickle
+import codecs
+import wandb
 
 
 class ReplayModel(ContinualModel):
@@ -107,6 +109,8 @@ class ReplayModel(ContinualModel):
         evals2, evects2 = find_eigs(L2, n_pairs=self.args.fmap_dim)
         gaps = evals2[1:] - evals2[:-1]
         self.wb_log['egap'] = torch.argmax(gaps).item()
+        # decode: pickle.loads(codecs.decode(evals.encode(), "base64"))
+        self.wb_log['evals'] = codecs.encode(pickle.dumps(evals2.detach().cpu()), "base64").decode()
 
         if self.args.replay_mode == 'evec':
             return F.mse_loss(evects2, evects1)
