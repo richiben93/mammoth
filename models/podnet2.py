@@ -169,8 +169,8 @@ class PodNetLoss(nn.Module):
         
     def forward(self, x, y, eta):
         y_map = self.eye[:x.shape[1], :x.shape[1]][y]
-        gts = (x[y_map].reshape(len(x)) - self.delta).exp()
-        ngts = x[~y_map].reshape(len(x), -1).exp().sum(1)
+        gts = ((x[y_map].reshape(len(x)) - self.delta) * eta).exp()
+        ngts = (x[~y_map].reshape(len(x), -1) * eta).exp().sum(1)
         return F.relu(-torch.log(gts/ngts)).mean()
 
 class PodNet2(ContinualModel):
