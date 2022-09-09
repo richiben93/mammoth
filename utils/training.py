@@ -129,6 +129,9 @@ def train(model: ContinualModel, dataset: ContinualDataset,
                 model_stash['batch_idx'] = i + 1
             model_stash['epoch_idx'] = epoch + 1
             model_stash['batch_idx'] = 0
+            if model.scheduler is not None:
+                model.scheduler.step()
+
         model_stash['task_idx'] = t + 1
         model_stash['epoch_idx'] = 0
 
@@ -165,6 +168,8 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         if args.csv_log:
             csv_logger.log(mean_acc)
             csv_logger.log_fullacc(accs)
+        if t == 1:
+            exit()
 
     if args.csv_log:
         csv_logger.add_bwt(results, results_mask_classes)

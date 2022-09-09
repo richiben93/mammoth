@@ -1,4 +1,7 @@
 from copy import deepcopy
+
+from torch.optim.lr_scheduler import CosineAnnealingLR
+
 from utils.augmentations import normalize
 import torch
 import torch.nn.functional as F
@@ -19,6 +22,9 @@ def get_parser() -> ArgumentParser:
 
     parser.add_argument('--wd_reg', type=float, required=True,
                         help='L2 regularization applied to the parameters.')
+    parser.add_argument('--scheduler', default=None, type=str,)
+    parser.add_argument('--scheduling', default=None,  nargs='+')
+    parser.add_argument('--lr_decay', default=0.2, type=float)
     return parser
 
 
@@ -122,6 +128,7 @@ class ICarl(ContinualModel):
         self.current_task = 0
         self.num_classes = self.dataset.N_CLASSES_PER_TASK * self.dataset.N_TASKS
 
+
     def forward(self, x):
         if self.class_means is None:
             with torch.no_grad():
@@ -130,10 +137,11 @@ class ICarl(ContinualModel):
 
         # feats = self.net.features(x).squeeze()
         try:
-            feats = self.net.features(x).float().squeeze()
+            feats = self.net.features(x)
         except:
-            _, feats = self.net(x, returnt='both').float().squeeze()
+            _, feats = self.net(x, returnt='both')
 
+        feats = feats.float().squeeze()
         feats = feats.reshape(feats.shape[0], -1)
         feats = feats.unsqueeze(1)
 
@@ -158,6 +166,7 @@ class ICarl(ContinualModel):
 
         self.opt.step()
 
+        self.wb_log['lr'] = self.scheduler.get_last_lr()[0] if self.args.scheduler is not None else self.args.lr
         return loss.item()
 
     @staticmethod
@@ -198,10 +207,18 @@ class ICarl(ContinualModel):
         return loss
 
     def begin_task(self, dataset):
+        self.opt = torch.optim.SGD(self.net.parameters(), lr=self.args.lr)
+        if self.args.scheduler == 'cosine':
+            self.scheduler = CosineAnnealingLR(self.opt, T_max=self.args.n_epochs)
+        elif self.args.scheduler == 'multistep':
+            self.scheduler = torch.optim.lr_scheduler.MultiStepLR(
+                self.opt, self.args.scheduling, gamma=self.args.lr_decay
+            )
+        elif self.args.scheduler is None:
+            self.scheduler = None
+        else:
+            raise NotImplementedError
 
-        # denorm = dataset.get_denormalization_transform()
-        # if denorm is None:
-        #     denorm = lambda x: x
         if self.current_task > 0:
             dataset.train_loader.dataset.targets = np.concatenate(
                 [dataset.train_loader.dataset.targets,
@@ -242,5 +259,9 @@ class ICarl(ContinualModel):
                  if labels[i].cpu() == _y]
             ).to(self.device)
             with bn_track_stats(self, False):
-                class_means.append(self.net.features(x_buf).mean(0).flatten())
+                try:
+                    feat = self.net.features(x_buf)
+                except:
+                    _, feat = self.net(x_buf, returnt='both')
+                class_means.append(feat.mean(0).flatten())
         self.class_means = torch.stack(class_means)

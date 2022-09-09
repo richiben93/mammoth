@@ -27,10 +27,12 @@ def get_parser() -> ArgumentParser:
                         help='L2 regularization applied to the parameters.')
     parser.add_argument('--lambda_f', type=float, required=True,
                         help='L2 regularization applied to the parameters.')
-    parser.add_argument('--delta', type=float, default=0.5,)
-    parser.add_argument('--k', type=int, default=10,)
+    parser.add_argument('--delta', type=float, default=0.5, )
+    parser.add_argument('--k', type=int, default=10, )
+    parser.add_argument('--scheduler', default='cosine' )
 
     return parser
+
 
 class PodNetClassifier(nn.Module):
     def __init__(self, in_features, out_features, k):
@@ -42,7 +44,7 @@ class PodNetClassifier(nn.Module):
         self.theta = nn.Parameter(torch.empty(in_features, k, out_features))
         nn.init.kaiming_uniform_(self.theta, a=math.sqrt(5))
         self.t = 0
-        
+
     def expand(self, num_classes):
         self.t += num_classes
         assert self.t <= self.out_features, "Trying to expand more than the maximum number of classes"
@@ -54,7 +56,10 @@ class PodNetClassifier(nn.Module):
             x = x.to(self.theta.device)
             y = y.to(self.theta.device)
             with torch.no_grad():
-                x = backbone.features(x)
+                try:
+                    x = backbone.features(x)
+                except:
+                    _, x = backbone(x, returnt='both')
                 x = F.normalize(x, dim=1, p=2)
                 feats.append(x)
                 labels.append(y)
@@ -67,13 +72,14 @@ class PodNetClassifier(nn.Module):
             self.theta[:, :, c] = torch.from_numpy(kmeans.cluster_centers_).to(self.theta.device).T
         print()
 
-
     def forward(self, x, with_eta=False):
         x = F.normalize(x, dim=1)
         theta = F.normalize(self.theta[:, :, :self.t], dim=0)
-        c = torch.einsum('bl,lkc->bkc', x, theta) # b k c-t
-        s = F.softmax(c, dim=1) # b k c-t
-        y = (c * s).sum(dim=1) # b c-t
+        # if theta.sum(0).sum(0).sum() < 0.0001:
+        #     print('piccolo theta')
+        c = torch.einsum('bl,lkc->bkc', x, theta)  # b k c-t
+        s = F.softmax(c, dim=1)  # b k c-t
+        y = (c * s).sum(dim=1)  # b c-t
         if not with_eta:
             return y
         else:
@@ -160,18 +166,20 @@ def baguette_fill_buffer(self: ContinualModel, mem_buffer: Buffer, dataset, t_id
     self.net.train(mode)
 
 
-
 class PodNetLoss(nn.Module):
     def __init__(self, delta, num_classes, device):
         super(PodNetLoss, self).__init__()
         self.delta = delta
         self.eye = torch.eye(num_classes).to(device).bool()
-        
-    def forward(self, x, y, eta):
-        y_map = self.eye[:x.shape[1], :x.shape[1]][y]
-        gts = ((x[y_map].reshape(len(x)) - self.delta) * eta).exp()
-        ngts = (x[~y_map].reshape(len(x), -1) * eta).exp().sum(1)
-        return F.relu(-torch.log(gts/ngts)).mean()
+
+    def forward(self, y_hat, y, eta):
+        y_map = self.eye[:y_hat.shape[1], :y_hat.shape[1]][y]
+        y_hat = eta * (y_hat - self.delta)
+        y_hat = y_hat - y_hat.max(1)[0].view(-1, 1)  # for numerical stability
+        gts = (y_hat[y_map].reshape(len(y_hat))).exp()
+        ngts = (y_hat[~y_map].reshape(len(y_hat), -1) * eta).exp().sum(1)
+        return F.relu(-torch.log(gts / ngts)).mean()
+
 
 class PodNet2(ContinualModel):
     NAME = 'podnet2'
@@ -184,7 +192,7 @@ class PodNet2(ContinualModel):
         # Instantiate buffers
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.eye = torch.eye(self.dataset.N_CLASSES_PER_TASK *
-                             self.dataset.N_TASKS).to(self.device)
+                                 self.dataset.N_TASKS).to(self.device)
 
         self.class_means = None
         self.old_net = None
@@ -193,8 +201,6 @@ class PodNet2(ContinualModel):
 
         self.net.classifier = PodNetClassifier(
             self.net.classifier.in_features, self.num_classes, self.args.k)
-            
-        self.opt = torch.optim.SGD(self.net.parameters(), lr=self.args.lr)
 
         self.flatnorm = lambda x, axis: F.normalize(x.pow(2).sum(axis).view(len(x), - 1), dim=1, p=2)
         self.loss = PodNetLoss(self.args.delta, self.num_classes, self.device)
@@ -205,16 +211,16 @@ class PodNet2(ContinualModel):
                 self.compute_class_means()
                 self.class_means = self.class_means.squeeze()
 
-        feats = self.net.features(x).squeeze()
+        # feats = self.net.features(x).squeeze()
         try:
             feats = self.net.features(x).float().squeeze()
         except:
-            _, feats = self.net(x, returnt='both').float().squeeze()
+            _, feats = self.net(x, returnt='both')
+            feats = feats.float().squeeze()
 
         feats = feats.reshape(feats.shape[0], -1)
         feats = F.normalize(feats, dim=1, p=2)
         feats = feats.unsqueeze(1)
-        
 
         pred = (F.normalize(self.class_means).unsqueeze(0) - feats).pow(2).sum(2)
         return -pred
@@ -231,14 +237,15 @@ class PodNet2(ContinualModel):
         if self.current_task > 0:
             with torch.no_grad():
                 ref_feature_set = self.old_net.forward_all(inputs)
-                ref_feats, ref_hs, ref_rawfeat = ref_feature_set['features'], ref_feature_set['attention'][:-1], ref_feature_set['raw_features']
+                ref_feats, ref_hs, ref_rawfeat = ref_feature_set['features'], ref_feature_set['attention'][:-1], \
+                                                 ref_feature_set['raw_features']
         self.opt.zero_grad()
-        
+
         feature_set = self.net.forward_all(inputs)
         feats, hs, rawfeat = feature_set['features'], feature_set['attention'][:-1], feature_set['raw_features']
         logits, eta = self.net.classifier(feats, with_eta=True)
 
-        class_loss = self.loss(logits, labels, eta)
+        class_loss = self.loss(logits, labels, eta=eta)
         if self.current_task > 0:
             l_pod_spatial = torch.mean(torch.stack([self.pod_spatial_loss(h, ref_h) for h, ref_h in zip(hs, ref_hs)]))
             l_pod_flat = (F.normalize(rawfeat, dim=1, p=2) - F.normalize(ref_rawfeat, dim=1, p=2)).pow(2).sum()
@@ -248,11 +255,15 @@ class PodNet2(ContinualModel):
         loss = class_loss + self.args.lambda_c * l_pod_spatial + self.args.lambda_f * l_pod_flat
 
         loss.backward()
+
+        torch.nn.utils.clip_grad_value_(self.net.parameters(), 1)
+
         self.opt.step()
 
         self.wb_log['class_loss'] = class_loss.item()
         self.wb_log['l_pod_spatial'] = l_pod_spatial.item()
         self.wb_log['l_pod_flat'] = l_pod_flat.item()
+        self.wb_log['lr'] = self.scheduler.get_last_lr()[0] if self.args.scheduler is not None else self.args.lr
 
         return loss.item()
 
@@ -265,33 +276,12 @@ class PodNet2(ContinualModel):
         l_h = (self.flatnorm(h, axis=3) - self.flatnorm(ref_h, axis=3)).pow(2).sum()
         return l_w + l_h
 
-    # def get_loss(self, outputs: torch.Tensor, labels: torch.Tensor,
-    #              task_idx: int, ref_logits: torch.Tensor) -> torch.Tensor:
-    #     labels = labels.long()
-    #     pc = task_idx * self.dataset.N_CLASSES_PER_TASK
-    #     ac = (task_idx + 1) * self.dataset.N_CLASSES_PER_TASK
-
-    #     outputs = outputs[:, :ac]
-    #     if task_idx == 0:
-    #         # Compute loss on the current task
-    #         targets = self.eye[labels][:, :ac]
-    #         loss = F.binary_cross_entropy_with_logits(outputs, targets)
-    #         assert loss >= 0
-    #     else:
-    #         targets = self.eye[labels][:, pc:ac]
-    #         comb_targets = torch.cat((ref_logits[:, :pc], targets), dim=1)
-    #         loss = F.binary_cross_entropy_with_logits(outputs, comb_targets)
-    #         assert loss >= 0
-
-    #     if self.args.wd_reg:
-    #         try:
-    #             loss += self.args.wd_reg * torch.sum(self.net.get_params() ** 2)
-    #         except:
-    #             loss += self.args.wd_reg * torch.sum(self.net.module.get_params() ** 2)
-
-    #     return loss
-
     def begin_task(self, dataset):
+        self.opt = torch.optim.SGD(self.net.parameters(), lr=self.args.lr, weight_decay=self.args.wd_reg, momentum=0.9)
+        if self.args.scheduler == 'cosine':
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.opt, self.args.n_epochs)
+        else:
+            raise ValueError('Podnet works only with cosine annealing')
         self.net.classifier.expand(dataset.N_CLASSES_PER_TASK)
         if self.current_task > 0:
             self.args.lambda_c *= (dataset.N_CLASSES_PER_TASK * self.current_task / self.N_CLASSES_PER_TASK) ** 0.5
@@ -310,7 +300,8 @@ class PodNet2(ContinualModel):
             else:
                 dataset.train_loader.dataset.data = np.concatenate(
                     [dataset.train_loader.dataset.data, torch.stack([((
-                        self.buffer.examples[i] * 255).type(torch.uint8).cpu())
+                                                                              self.buffer.examples[i] * 255).type(
+                        torch.uint8).cpu())
                                                                      for i in range
                                                                      (self.buffer.num_seen_examples)]).numpy().swapaxes(
                         1, 3)])
@@ -339,5 +330,9 @@ class PodNet2(ContinualModel):
                  if labels[i].cpu() == _y]
             ).to(self.device)
             with bn_track_stats(self, False):
-                class_means.append(self.net.features(x_buf).mean(0).flatten())
+                try:
+                    feat = self.net.features(x_buf)
+                except:
+                    _, feat = self.net(x_buf, returnt='both')
+                class_means.append(feat.mean(0).flatten())
         self.class_means = torch.stack(class_means)

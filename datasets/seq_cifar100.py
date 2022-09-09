@@ -6,6 +6,7 @@
 from torchvision.datasets import CIFAR100
 import torchvision.transforms as transforms
 from backbone.ResNet18 import resnet18, lopeznet, resnet32
+from backbone.RebuffiNet import resnet_rebuffi
 import torch.nn.functional as F
 import numpy as np
 from utils.conf import base_path_dataset
@@ -186,7 +187,7 @@ class SequentialCIFAR100_20x5(ContinualDataset):
         # class_order_arr[class_order_arr != -1] = np.random.permutation(class_order_arr[class_order_arr != -1])
 
         train, test = store_masked_loaders(train_dataset, test_dataset, self)
-                                           # class_order_arr)
+        # class_order_arr)
 
         return train, test
 
@@ -380,7 +381,6 @@ class SequentialCIFAR100_3x5(ContinualDataset):
         return transform
 
 
-
 class SequentialCIFAR100_50x2(ContinualDataset):
     NAME = 'seq-cifar100-50x2'
     SETTING = 'class-il'
@@ -413,12 +413,11 @@ class SequentialCIFAR100_50x2(ContinualDataset):
                                      download=True, transform=test_transform)
 
         class_order = []
-        
+
         train, test = store_masked_loaders(train_dataset, test_dataset, self)
 
         return train, test
 
-    
     @staticmethod
     def get_transform():
         transform = transforms.Compose(
@@ -427,6 +426,8 @@ class SequentialCIFAR100_50x2(ContinualDataset):
 
     @staticmethod
     def get_backbone(hookme=False):
+        # print('Using resnet rebuffiiiiiii')
+        # return resnet_rebuffi(n_classes=SequentialCIFAR100_50x2.N_CLASSES_PER_TASK * SequentialCIFAR100_50x2.N_TASKS)
         return resnet32(SequentialCIFAR100_50x2.N_CLASSES_PER_TASK
                         * SequentialCIFAR100_50x2.N_TASKS)
 
