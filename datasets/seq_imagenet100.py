@@ -6,7 +6,7 @@
 import numpy as np
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
-from backbone.ResNet18 import resnet18
+from backbone.ResNet18 import resnet18_imagenet
 import torch.nn.functional as F
 from utils.conf import base_path_dataset
 from PIL import Image
@@ -174,7 +174,7 @@ class SequentialImagenet100(ContinualDataset):
 
     @staticmethod
     def get_backbone():
-        return resnet18(SequentialImagenet100.N_CLASSES_PER_TASK
+        return resnet18_imagenet(SequentialImagenet100.N_CLASSES_PER_TASK
                         * SequentialImagenet100.N_TASKS)
 
     @staticmethod
