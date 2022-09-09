@@ -112,7 +112,7 @@ def main(args=None):
         backbone = dataset.get_backbone()
     loss = dataset.get_loss()
     model = get_model(args, backbone, loss, dataset.get_transform())
-    if socket.gethostname().startswith('go') or socket.gethostname() == 'jojo':
+    if socket.gethostname().startswith('go') or socket.gethostname() == 'jojo' or socket.gethostname() == 'yobama':
         import setproctitle
         setproctitle.setproctitle('{}_{}_{}'.format(args.model, args.buffer_size if 'buffer_size' in args else 0, args.dataset))
 

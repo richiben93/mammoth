@@ -97,6 +97,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
 
     print(file=sys.stderr)
     for t in range(dataset.N_TASKS):
+        model.reset_scheduler()
         model.net.train()
         train_loader, test_loader = dataset.get_data_loaders()
         if hasattr(model, 'begin_task'):
@@ -129,6 +130,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
                 model_stash['batch_idx'] = i + 1
             model_stash['epoch_idx'] = epoch + 1
             model_stash['batch_idx'] = 0
+            model.scheduler_step()
         model_stash['task_idx'] = t + 1
         model_stash['epoch_idx'] = 0
 

@@ -5,23 +5,28 @@ from random import randint
 
 from typing import List
 
+#--dataset seq-cifar100-10x10 --wandb --model er_ace_replay --lr 0.1 --minibatch_size 64 --batch_size 64 --n_epochs 20 --buffer_size 2000 --rep_minibatch 128 --knn_laplace 20 --replay_weight 0.1      --replay_mode none
+
+#--dataset seq-cifar100-10x10 --model joint_replay --batch_size 128 --lr 0.1 --n_epochs 1 --buffer_size 2000 --minibatch_size 64 --rep_minibatch 512 --knn_laplace 20 --fmap_dim 120 --replay_mode egap3 --replay_weight 0.1
+
 grid = {
-    "dataset": ["seq-cifar10"],  # "seq-cifar100-10x10"],
-    "wandb": [True],
-    "model": ["er_ace_replay"],
+    "dataset": ["seq-cifar100-10x10"],  # "seq-cifar100-10x10"],
+    "wandb": [False],
+    "model": ["joint_replay"],  # "joint_replay", "er_ace_replay"],
     "batch_size": ["128"],
     "lr": ["0.1"],
     "n_epochs": ["20"],
     "buffer_size": ["2000"],
-    "minibatch_size": ["128"],
+    "minibatch_size": ["64"],
     "rep_minibatch": ["512"],
-    "heat_kernel": [False, True],
-    "knn_laplace": ["10"],
-    "fmap_dim": ["20"],
-    "replay_mode": ["eval", "evectors"],
+    "heat_kernel": [],
+    "knn_laplace": ["20"],
+    "fmap_dim": ["120"],
+    "replay_mode": ["egap2"],
     "cos_dist": [False, True],
-    "replay_weight": ["0.1"],
+    "replay_weight": ["0.01", "0.001"],
     "save_checks": [],
+    "custom_log": [True],
 }
 
 
@@ -78,7 +83,7 @@ else:
             prev_lines = [line for line in f.readlines()]
         with open(args.output, 'w') as f:
             for line in prev_lines:
-                f.write(line if line.startswith("#") else "#"+line)
+                f.write(line if line.startswith("#") or line == '\n' else "#"+line)
     with open(args.output, 'a') as f:
         f.write("\n".join(lines))
         f.write("\n")
