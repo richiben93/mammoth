@@ -5,7 +5,7 @@
 
 from torchvision.datasets import CIFAR100
 import torchvision.transforms as transforms
-from backbone.ResNet18 import resnet18, lopeznet
+from backbone.ResNet18 import resnet18, lopeznet, resnet32
 import torch.nn.functional as F
 import numpy as np
 from utils.conf import base_path_dataset
@@ -202,7 +202,7 @@ class SequentialCIFAR100_20x5(ContinualDataset):
     @staticmethod
     def get_backbone(hookme=False, future_classes=0):
 
-        return lopeznet(SequentialCIFAR100_20x5.N_CLASSES_PER_TASK
+        return resnet32(SequentialCIFAR100_20x5.N_CLASSES_PER_TASK
                         * SequentialCIFAR100_20x5.N_TASKS + future_classes)
 
     @staticmethod

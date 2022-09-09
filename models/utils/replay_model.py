@@ -65,14 +65,14 @@ class ReplayModel(ContinualModel):
         if self.args.replay_mode == 'none':
             return torch.tensor(0., dtype=torch.float, device=self.device)
         if self.args.rep_minibatch == self.args.buffer_size:
-            if self.args.replay_mode in ['egap', 'egap2', 'egap2-1', 'egap2+1', 'egap3', 'egap2m']:
+            if self.args.replay_mode.startswith('egap'):
                 buffer_data = self.buffer.get_all_data(self.transform)
                 inputs, labels = buffer_data[0], buffer_data[1]
                 features1 = self.net.features(inputs).detach()
             else:
                 inputs, labels, features1 = self.fixed_buffer.get_all_data(self.transform)
         else:
-            if self.args.replay_mode in ['egap', 'egap2', 'egap2-1', 'egap2+1', 'egap3', 'egap2m']:
+            if self.args.replay_mode.startswith('egap'):
                 buffer_data = self.buffer.get_data(self.args.rep_minibatch, self.transform)
                 inputs, labels = buffer_data[0], buffer_data[1]
                 features1 = self.net.features(inputs).detach()
@@ -164,7 +164,8 @@ class ReplayModel(ContinualModel):
     def end_task(self, dataset):
         self.task += 1
         # buffer <- future_buffer (con logits)
-        self.sync_buffers()
+        if not self.args.replay_mode.startswith('egap') and self.args.replay_mode != 'none':
+            self.sync_buffers()
 
     @torch.no_grad()
     def sync_buffers(self):
