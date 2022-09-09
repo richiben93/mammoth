@@ -2,7 +2,7 @@
 # All rights reserved.
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
-
+from datetime import datetime
 from argparse import ArgumentParser
 from datasets import NAMES as DATASET_NAMES
 from models import get_all_models
@@ -53,6 +53,7 @@ def add_management_args(parser: ArgumentParser) -> None:
                         help='Save checkpoints')
     parser.add_argument('--validation', action='store_true',
                         help='Test on the validation set')
+    parser.add_argument('--set_device', default=None, type=str)
 
 
 def add_rehearsal_args(parser: ArgumentParser) -> None:
@@ -64,3 +65,4 @@ def add_rehearsal_args(parser: ArgumentParser) -> None:
                         help='The size of the memory buffer.')
     parser.add_argument('--minibatch_size', type=int, required=True,
                         help='The batch size of the memory buffer.')
+

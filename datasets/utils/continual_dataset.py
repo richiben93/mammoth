@@ -149,7 +149,7 @@ def store_masked_loaders(train_dataset: datasets, test_dataset: datasets,
             raise ImportError("Please install DALI from https://www.github.com/NVIDIA/DALI to run this example.")
         @pipeline_def
         def get_dali_pipe(file_list, is_training):
-            dali_cpu = False
+            dali_cpu = True
             assert 'MAMMOTH_RANK' not in os.environ, "DALI is not supported with DDP"
             images, labels = fn.readers.file(file_list=file_list,
                                             shard_id=0,
