@@ -109,8 +109,9 @@ class ReplayModel(ContinualModel):
         evals2, evects2 = find_eigs(L2, n_pairs=self.args.fmap_dim)
         gaps = evals2[1:] - evals2[:-1]
         self.wb_log['egap'] = torch.argmax(gaps).item()
+        # log evals
         # decode: pickle.loads(codecs.decode(evals.encode(), "base64"))
-        self.wb_log['evals'] = codecs.encode(pickle.dumps(evals2.detach().cpu()), "base64").decode()
+        # self.wb_log['evals'] = codecs.encode(pickle.dumps(evals2.detach().cpu()), "base64").decode()
 
         if self.args.replay_mode == 'evec':
             return F.mse_loss(evects2, evects1)
@@ -127,11 +128,11 @@ class ReplayModel(ContinualModel):
 
         if self.args.replay_mode == 'egap2':
             n = self.N_CLASSES_PER_TASK * self.task
-            return evals2[:n+1].sum() - evals2[n+1]
+            return evals2[:n + 1].sum() - evals2[n + 1]
 
         if self.args.replay_mode == 'egap2m':
             n = self.N_CLASSES_PER_TASK * self.task
-            return evals2[:n+1].mean() - evals2[n+1]
+            return evals2[:n + 1].mean() - evals2[n + 1]
 
         if self.args.replay_mode == 'egap3':
             n = self.N_CLASSES_PER_TASK * self.task
@@ -143,7 +144,7 @@ class ReplayModel(ContinualModel):
 
         if self.args.replay_mode == 'egap2+1':
             n = self.N_CLASSES_PER_TASK * self.task
-            return evals2[:n+2].sum() - evals2[n+2]
+            return evals2[:n + 2].sum() - evals2[n + 2]
 
         if self.args.replay_mode == 'evalgap':
             n = self.N_CLASSES_PER_TASK * self.task
@@ -151,7 +152,7 @@ class ReplayModel(ContinualModel):
 
         if self.args.replay_mode == 'evalgap2':
             n = self.task
-            return -gaps[n] + F.mse_loss(evals2[:n+1], evals1[:n+1])
+            return -gaps[n] + F.mse_loss(evals2[:n + 1], evals1[:n + 1])
 
         if self.args.replay_mode.startswith('fmeval'):
             codes = [int(c) for c in self.args.replay_mode.rsplit('-')[1]]
