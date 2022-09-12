@@ -219,46 +219,6 @@ class ErACEDiag(DiagonalModel):
         self.new_classifier.train()
         return correct / total * 100
 
-    def log_accs(self, accs):
-        log = {}
-        cil_acc, til_acc = np.mean(accs, axis=1).tolist()
-        if self.args.pretrained_model is not None:
-            pm_acc = self.pm_task(1)
-            log.update({'Pretrained Model-acc': pm_acc})
-        self.net.eval()
-        x_buf, y_buf = self.spectral_buffer.get_all_data(self.spectral_buffer_not_aug_transf)
-        feat_buf = self.net.features(x_buf)
-        self.net.train()
-        # sp_ds = TensorDataset(*self.spectral_buffer.get_all_data(self.spectral_buffer_not_aug_transf))
-        # self.pm_eval(sp_ds)
-        # running consolidation error
-        diag_error = None
-        c_0 = None
-        if self.task > 0:
-            with torch.no_grad():
-                diag_error, c_0 = self.get_off_diagonal_error(return_c=True)
-                diag_error = diag_error.item()
-                print(f'diag err: {diag_error}')
-
-        log.update({'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Diag-Error': diag_error})
-
-        if wandb.run:
-            log.update({**{f'Class-IL task-{i + 1}': acc for i, acc in enumerate(accs[0])},
-                        **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])}})
-            fig, ax = plt.subplots(1, 2, sharey=True)
-            ax[0].imshow(c_0.cpu() * torch.eye(c_0.shape[0]), cmap='bwr', vmin=-1, vmax=1)
-            ax[0].set_title(f'diag_err: {(c_0.cpu() * torch.eye(c_0.shape[0])).pow(2).sum().item() : .3f}')
-            ax[1].imshow(c_0.cpu() * (torch.eye(c_0.shape[0]) == 0), cmap='bwr', vmin=-1, vmax=1)
-            ax[1].set_title(f'off_diag_err: {(c_0.cpu() * (torch.eye(c_0.shape[0]) == 0)).pow(2).sum().item() : .3f}')
-            fig.suptitle(f'Task {self.task}')
-            log.update({"Spectral Buffer functional map": plt})
-            wandb.log(log)
-
-        log.update({'c0': c_0.tolist() if c_0 is not None else c_0, 'task': self.task})
-        self.log_results.append(log)
-        self.log_results_spectral.append({'feat_buf': feat_buf.tolist(), 'y_buf': y_buf.tolist()})
-        if self.task == 2:
-            self.end_training()
 
     def end_training(self, print_latents=False):
         if self.args.print_custom_log:

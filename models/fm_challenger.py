@@ -135,24 +135,6 @@ class FMChallenger(ContinualModel):
         if self.task == 0:
             self.add_buf_latents()
 
-    def log_accs(self, accs):
-        cil_acc, til_acc = np.mean(accs, axis=1).tolist()
-
-        log_obj = {
-            'Class-IL mean': cil_acc, 'Task-IL mean': til_acc,
-            **{f'Class-IL task-{i + 1}': acc for i, acc in enumerate(accs[0])},
-            **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])},
-            'task': self.task,
-        }
-        # self.log_results.append(log_obj)
-        self.wblog({'test': log_obj})
-        self.save_checkpoint()
-
-        if self.task > 1:
-            exit()
-
-        self.task += 1
-
     @torch.no_grad()
     def add_buf_latents(self):
         self.net.eval()

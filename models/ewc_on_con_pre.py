@@ -97,34 +97,7 @@ class EwcOnConPre(PretrainedConsolidationModel):
 
         self.wblog({'training': wandb_log})
         return loss.item()
-
-    def log_accs(self, accs):
-        cil_acc, til_acc = np.mean(accs, axis=1).tolist()
-        pre_acc = self.pre_dataset_train_head()
-
-        # running consolidation error
-        con_error = None
-        if self.task > 0:
-            with torch.no_grad():
-                con_error = self.get_consolidation_error().item()
-                # print(f'con err: {con_error}')
-
-        log_obj = {
-            'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error,
-            'PreTrain-acc': pre_acc,
-            **{f'Class-IL task-{i + 1}': acc for i, acc in enumerate(accs[0])},
-            **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])},
-            'task': self.task,
-        }
-        self.log_results.append(log_obj)
-        self.wblog({'testing': log_obj})
-
-        if self.task > 1:
-            pass
-
-        if self.task == self.N_TASKS:
-            self.end_training()
-
+        
     def end_training(self):
         if self.args.custom_log:
             log_dir = f'{base_path()}logs/{self.dataset_name}/{self.NAME}'

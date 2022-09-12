@@ -76,38 +76,6 @@ class ErACECon(ConsolidationModel):
     def end_task(self, dataset):
         super().end_task(dataset)
 
-    def log_accs(self, accs):
-        cil_acc, til_acc = np.mean(accs, axis=1).tolist()
-
-        # running consolidation error
-        con_error = None
-        if self.task > 1:
-            with torch.no_grad():
-                con_error = self.get_consolidation_error().item()
-                print(f'con err: {con_error}')
-
-        log_obj = {
-            'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error,
-            **{f'Class-IL task-{i + 1}': acc for i, acc in enumerate(accs[0])},
-            **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])},
-            'task': self.task,
-        }
-        self.wblog({'testing': log_obj})
-
-        # self.log_results.append({'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error})
-        self.log_results.append({'Class-IL': accs[0], 'Task-IL': accs[1], 'Con-Error': con_error})
-
-        if self.task > 1:
-            # log_dir = f'/nas/softechict-nas-2/efrascaroli/mammoth-data/logs/{self.dataset_name}/{self.NAME}'
-            # obj = {**vars(self.args), 'results': self.log_results}
-            # self.print_logs(log_dir, obj, name='results')
-            log_dir = f'/nas/softechict-nas-2/efrascaroli/mammoth-data/logs/{self.dataset_name}/{self.NAME}'
-            obj = {**vars(self.args), 'results': self.log_results}
-            self.print_logs(log_dir, obj, name='res1')
-            exit()
-
-        if self.task == self.N_TASKS:
-            self.end_training()
 
     def end_training(self, print_latents=False):
         if print_latents:

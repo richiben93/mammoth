@@ -74,22 +74,3 @@ class ErACE(ContinualModel):
         self.wblog({'training': wandb_log})
 
         return loss.item()
-
-    def log_accs(self, accs):
-        cil_acc, til_acc = np.mean(accs, axis=1).tolist()
-
-        # running consolidation error
-        con_error = None
-        # if self.current_task > 2:
-        #     with torch.no_grad():
-        #         con_error = self.get_consolidation_error().item()
-
-        log_obj = {
-            'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error,
-            **{f'Class-IL task-{i + 1}': acc for i, acc in enumerate(accs[0])},
-            **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])},
-            'task': self.task,
-        }
-        self.wblog({'testing': log_obj})
-
-        # self.log_results.append({'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': con_error})
