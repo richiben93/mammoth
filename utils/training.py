@@ -30,7 +30,7 @@ def mask_classes(outputs: torch.Tensor, dataset: ContinualDataset, k: int) -> No
     outputs[:, (k + 1) * dataset.N_CLASSES_PER_TASK:
                dataset.N_TASKS * dataset.N_CLASSES_PER_TASK] = -float('inf')
 
-
+@torch.no_grad()
 def evaluate(model: ContinualModel, dataset: ContinualDataset, last=False) -> Tuple[list, list]:
     """
     Evaluates the accuracy of the model for each past task.

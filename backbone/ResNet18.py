@@ -61,7 +61,7 @@ class BasicBlock(nn.Module):
         if return_prerelu:
             return relu(out), out
         else:
-            return out
+            return relu(out)
 
 
 class ResNet(nn.Module):
