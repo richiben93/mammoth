@@ -72,14 +72,7 @@ class CscCtModel(ContinualModel):
         ) * (self.args.ct_temperature ** 2)
         return ct_loss * self.args.ct_weight
 
-    def get_cscct_loss(self, stream_inputs: torch.Tensor, stream_targets: torch.Tensor):
-        buffer_data = self.buffer.get_data(self.args.batch_size, self.transform)
-        buf_inputs, buf_labels = buffer_data[0], buffer_data[1]
-
-        # concatenate stream with buf
-        inputs = torch.cat([stream_inputs, buf_inputs], dim=0)
-        targets = torch.cat([stream_targets, buf_labels], dim=0)
-
+    def get_cscct_loss(self, inputs: torch.Tensor, targets: torch.Tensor):
         # get the current features
         cur_features = self.net.features(inputs)
         with torch.no_grad():

@@ -1,6 +1,6 @@
 import os
 import sys
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from random import randint
 
 from typing import List
@@ -11,22 +11,29 @@ from typing import List
 
 grid = {
     "dataset": ["seq-cifar100-10x10"],  # "seq-cifar100-10x10"],
-    "wandb": [False],
-    "model": ["joint_replay"],  # "joint_replay", "er_ace_replay"],
-    "batch_size": ["128"],
+    "wandb": [True],
+    "model": ["er_ace_replay"],  # "joint_replay", "er_ace_replay"],
+    "batch_size": ["64"],
     "lr": ["0.1"],
-    "n_epochs": ["20"],
+    "n_epochs": ["50"],
+    "lr_decay_steps": ["35,45"],
     "buffer_size": ["2000"],
     "minibatch_size": ["64"],
     "rep_minibatch": ["512"],
     "heat_kernel": [],
     "knn_laplace": ["20"],
-    "fmap_dim": ["120"],
-    "replay_mode": ["egap2"],
-    "cos_dist": [False, True],
-    "replay_weight": ["0.01", "0.001"],
+    "fmap_dim": ["160"],
+    "replay_mode": ["none"],    # egap2 egap2-1 egap3
+    "cos_dist": [],
+    "replay_weight": ["0.1"],
     "save_checks": [],
-    "custom_log": [True],
+    "custom_log": [],
+}
+#--output sbatch/mammoth/list_sbatch.txt --title "ejoint" --comment_previous
+props = {
+    "output": "sbatch/mammoth/list_sbatch.txt",
+    "title": "",
+    "comment_previous": True,
 }
 
 
@@ -66,11 +73,12 @@ for key, values in grid.items():
 #     lines[i] = lines[i][1:]
 print(f"{len(lines)} lines generated")
 
-parser = ArgumentParser(description='Generate list for srv-sbatch', allow_abbrev=False)
-parser.add_argument('--output', type=str, required=False, help='File in which to insert sbatch lines (default stdout).')
-parser.add_argument('--title', type=str, required=False, help='Add title (comment in output).')
-parser.add_argument('--comment_previous', action='store_true', help='Comment previous lines in output file.')
-args = parser.parse_args()
+# parser = ArgumentParser(description='Generate list for srv-sbatch', allow_abbrev=False)
+# parser.add_argument('--output', type=str, required=False, help='File in which to insert sbatch lines (default stdout).')
+# parser.add_argument('--title', type=str, required=False, help='Add title (comment in output).')
+# parser.add_argument('--comment_previous', action='store_true', help='Comment previous lines in output file.')
+# args = parser.parse_args(props)
+args = Namespace(**props)
 
 if args.title is not None:
     lines.insert(0, f"## {args.title}")
@@ -85,6 +93,7 @@ else:
             for line in prev_lines:
                 f.write(line if line.startswith("#") or line == '\n' else "#"+line)
     with open(args.output, 'a') as f:
+        f.write("\n")
         f.write("\n".join(lines))
         f.write("\n")
     print(f"{len(lines)} lines written to {args.output}")

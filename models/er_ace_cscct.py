@@ -53,7 +53,10 @@ class ErACECscCt(CscCtModel):
             loss += erace_loss * self.args.erace_weight
 
             if self.args.csc_weight > 0 and self.args.ct_weight > 0:
-                cscct_loss = self.get_cscct_loss(inputs, labels)
+                # concatenate stream with buf
+                full_inputs = torch.cat([inputs, buf_inputs], dim=0)
+                full_targets = torch.cat([labels, buf_labels], dim=0)
+                cscct_loss = self.get_cscct_loss(full_inputs, full_targets)
                 self.wb_log['cscct_loss'] = cscct_loss.item()
                 loss += cscct_loss
 
