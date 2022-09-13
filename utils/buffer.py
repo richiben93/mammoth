@@ -8,12 +8,13 @@ import numpy as np
 from typing import Tuple
 from torchvision import transforms
 
-
-def reservoir(num_seen_examples: int, buffer_size: int) -> int:
+def reservoir(num_seen_examples: int, buffer_size: int, **kwargs) -> int:
     """
     Reservoir sampling algorithm.
     :param num_seen_examples: the number of seen examples
     :param buffer_size: the maximum buffer size
+    :param labels: the set of buffer labels
+    :param proposed_class: the class of the current example
     :return: the target index if the current image is sampled, else -1
     """
     if num_seen_examples < buffer_size:
@@ -22,6 +23,28 @@ def reservoir(num_seen_examples: int, buffer_size: int) -> int:
     rand = np.random.randint(0, num_seen_examples + 1)
     if rand < buffer_size:
         return rand
+    else:
+        return -1
+
+def balancoir(num_seen_examples: int, buffer_size: int, labels: np.array, proposed_class: int) -> int:
+    """
+    balancoir sampling algorithm.
+    :param num_seen_examples: the number of seen examples
+    :param buffer_size: the maximum buffer size
+    :param labels: the set of buffer labels
+    :param proposed_class: the class of the current example
+    :return: the target index if the current image is sampled, else -1
+    """
+    if num_seen_examples < buffer_size:
+        return num_seen_examples
+
+    l, c = np.unique(labels, return_counts=True)
+    rand = np.random.randint(0, num_seen_examples + 1)
+
+    if rand < buffer_size or c[l == proposed_class] < np.median(c):
+        target_class = l[np.argmax(c)]
+        idx = np.arange(buffer_size)[labels == target_class][rand % np.argmax(c)]
+        return idx
     else:
         return -1
 
@@ -35,11 +58,11 @@ class Buffer:
     The memory buffer of rehearsal method.
     """
     def __init__(self, buffer_size, device, n_tasks=None, mode='reservoir'):
-        assert mode in ['ring', 'reservoir']
+        assert mode in ['ring', 'reservoir', 'balancoir']
         self.buffer_size = buffer_size
         self.device = device
         self.num_seen_examples = 0
-        self.functional_index = eval(mode)
+        self.sampling_policy = {'reservoir': reservoir, 'ring': reservoir, 'balancoir': balancoir}[mode]
         if mode == 'ring':
             assert n_tasks is not None
             self.task_number = n_tasks
@@ -75,7 +98,8 @@ class Buffer:
             self.init_tensors(examples, labels, logits, task_labels)
 
         for i in range(examples.shape[0]):
-            index = reservoir(self.num_seen_examples, self.buffer_size)
+            index = self.sampling_policy(self.num_seen_examples, self.buffer_size,
+                        labels=self.labels if hasattr(self, 'labels') else None, proposed_class=labels[i])
             self.num_seen_examples += 1
             if index >= 0:
                 self.examples[index] = examples[i].to(self.device)
