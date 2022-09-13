@@ -163,7 +163,7 @@ class ICarlCscCt(CscCtModel):
         self.wb_log['icarl_loss'] = loss.item()
 
         if self.task > 0 and self.args.buffer_size > 0:
-            if self.args.csc_weight > 0 and self.args.ct_weight > 0:
+            if self.args.csc_weight > 0 or self.args.ct_weight > 0:
                 cscct_loss = self.get_cscct_loss(inputs, labels)
                 self.wb_log['cscct_loss'] = cscct_loss.item()
                 loss += cscct_loss
