@@ -5,36 +5,42 @@ from random import randint
 
 from typing import List
 
-#--dataset seq-cifar100-10x10 --wandb --model er_ace_replay --lr 0.1 --minibatch_size 64 --batch_size 64 --n_epochs 20 --buffer_size 2000 --rep_minibatch 128 --knn_laplace 20 --replay_weight 0.1      --replay_mode none
 
 #--dataset seq-cifar100-10x10 --model joint_replay --batch_size 128 --lr 0.1 --n_epochs 1 --buffer_size 2000 --minibatch_size 64 --rep_minibatch 512 --knn_laplace 20 --fmap_dim 120 --replay_mode egap3 --replay_weight 0.1
 
-grid = {
+common_props = {"output": "sbatch/mammoth/list_sbatch.txt", "title": None}
+common_grid = {
     "dataset": ["seq-cifar100-10x10"],  # "seq-cifar100-10x10"],
     "wandb": [True],
-    "model": ["er_ace_replay"],  # "joint_replay", "er_ace_replay"],
-    "batch_size": ["64"],
+    "batch_size": ["32"],
     "lr": ["0.1"],
     "n_epochs": ["50"],
     "lr_decay_steps": ["35,45"],
     "buffer_size": ["2000"],
-    "minibatch_size": ["64"],
+    "minibatch_size": ["32"],
+    "save_checks": [],
+    "custom_log": [],
+}
+
+props = {**common_props, "title": "erace - egap2", "comment_previous": True}
+grid = {
+    **common_grid,
+    "model": ["er_ace_replay"],  # "joint_replay", "er_ace_replay"],
+    "lr": ["0.1", "0.03"],
     "rep_minibatch": ["512"],
     "heat_kernel": [],
     "knn_laplace": ["20"],
     "fmap_dim": ["160"],
-    "replay_mode": ["none"],    # egap2 egap2-1 egap3
-    "cos_dist": [],
-    "replay_weight": ["0.1"],
+    "replay_mode": ["egap2"],    # egap2 egap2-1 egap3
+    "cos_dist": [True, False],
+    "replay_weight": ["0.01", "0.001"],
     "save_checks": [],
     "custom_log": [],
 }
-#--output sbatch/mammoth/list_sbatch.txt --title "ejoint" --comment_previous
-props = {
-    "output": "sbatch/mammoth/list_sbatch.txt",
-    "title": "",
-    "comment_previous": True,
-}
+
+# cscct
+# grid = {
+# }
 
 
 # "   ".rjust(len(key), ' ')

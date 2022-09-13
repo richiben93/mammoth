@@ -43,7 +43,7 @@ def balancoir(num_seen_examples: int, buffer_size: int, labels: np.array, propos
     if rand < buffer_size or len(unique_map) <= proposed_class or unique_map[proposed_class] < np.median(unique_map[unique_map > 0]):
         target_class = np.argmax(unique_map)
         e = rand % unique_map.max()
-        idx = np.arange(buffer_size)[labels == target_class][rand % unique_map.max()]
+        idx = np.arange(buffer_size)[labels.cpu() == target_class][rand % unique_map.max()]
         return idx
     else:
         return -1
@@ -133,6 +133,40 @@ class Buffer:
 
         choice = np.random.choice(min(self.num_seen_examples, self.examples.shape[0]),
                                   size=size, replace=False)
+        if transform is None: transform = lambda x: x
+        ret_tuple = (torch.stack([transform(ee.cpu())
+                            for ee in self.examples[choice]]).to(self.device),)
+        for attr_str in self.attributes[1:]:
+            if hasattr(self, attr_str):
+                attr = getattr(self, attr_str)
+                ret_tuple += (attr[choice],)
+
+        return ret_tuple
+
+    def get_balanced_data(self, size: int, transform: transforms=None, n_classes=-1) -> Tuple:
+        """
+        Random samples a batch of size items.
+        :param size: the number of requested items
+        :param transform: the transformation to be applied (data augmentation)
+        :return:
+        """
+        if size > min(self.num_seen_examples, self.examples.shape[0]):
+            size = min(self.num_seen_examples, self.examples.shape[0])
+
+        tot_classes, class_counts = torch.unique(self.labels, return_counts=True)
+        if n_classes == -1:
+            n_classes = len(tot_classes)
+        size_per_class = torch.full([n_classes], size // n_classes)
+        size_per_class[:size % n_classes] += 1
+        selected = tot_classes[class_counts >= size_per_class[0]]
+        selected = selected[torch.randperm(len(selected))[:n_classes]]
+        choice = []
+        for i, id_class in enumerate(selected):
+            choice += np.random.choice(torch.where(self.labels == id_class)[0].cpu(),
+                                       size=size_per_class[i].item(),
+                                       replace=False).tolist()
+        choice = np.array(choice)
+
         if transform is None: transform = lambda x: x
         ret_tuple = (torch.stack([transform(ee.cpu())
                             for ee in self.examples[choice]]).to(self.device),)

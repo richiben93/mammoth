@@ -128,7 +128,7 @@ def store_masked_loaders(train_dataset: datasets, test_dataset: datasets,
 
     if 'MAMMOTH_RANK' not in os.environ:
         train_loader = DataLoader(train_dataset,
-                                  batch_size=setting.args.batch_size, shuffle=True)
+                                  batch_size=setting.args.batch_size, shuffle=True, num_workers=4)
     else:
         train_loader = DataLoader(train_dataset,
                                   batch_size=setting.args.batch_size,
