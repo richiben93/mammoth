@@ -3,6 +3,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from enum import unique
 import torch
 import numpy as np
 from typing import Tuple
@@ -26,7 +27,7 @@ def reservoir(num_seen_examples: int, buffer_size: int, **kwargs) -> int:
     else:
         return -1
 
-def balancoir(num_seen_examples: int, buffer_size: int, labels: np.array, proposed_class: int) -> int:
+def balancoir(num_seen_examples: int, buffer_size: int, labels: np.array, proposed_class: int, unique_map: np.array) -> int:
     """
     balancoir sampling algorithm.
     :param num_seen_examples: the number of seen examples
@@ -37,13 +38,12 @@ def balancoir(num_seen_examples: int, buffer_size: int, labels: np.array, propos
     """
     if num_seen_examples < buffer_size:
         return num_seen_examples
-
-    l, c = np.unique(labels, return_counts=True)
+    
     rand = np.random.randint(0, num_seen_examples + 1)
-
-    if rand < buffer_size or c[l == proposed_class] < np.median(c):
-        target_class = l[np.argmax(c)]
-        idx = np.arange(buffer_size)[labels == target_class][rand % np.argmax(c)]
+    if rand < buffer_size or len(unique_map) <= proposed_class or unique_map[proposed_class] < np.median(unique_map[unique_map > 0]):
+        target_class = np.argmax(unique_map)
+        e = rand % unique_map.max()
+        idx = np.arange(buffer_size)[labels == target_class][rand % unique_map.max()]
         return idx
     else:
         return -1
@@ -68,6 +68,15 @@ class Buffer:
             self.task_number = n_tasks
             self.buffer_portion_size = buffer_size // n_tasks
         self.attributes = ['examples', 'labels', 'logits', 'task_labels']
+
+        self.unique_map = np.empty((0,), dtype=np.int32)
+
+    def update_unique_map(self, label_in, label_out=None):
+        while len(self.unique_map) <= label_in:
+            self.unique_map = np.concatenate((self.unique_map, np.zeros((len(self.unique_map) * 2 + 1), dtype=np.int32)), axis=0)
+        self.unique_map[label_in] += 1
+        if label_out is not None:
+            self.unique_map[label_out] -= 1
 
     def init_tensors(self, examples: torch.Tensor, labels: torch.Tensor,
                      logits: torch.Tensor, task_labels: torch.Tensor) -> None:
@@ -98,10 +107,11 @@ class Buffer:
             self.init_tensors(examples, labels, logits, task_labels)
 
         for i in range(examples.shape[0]):
-            index = self.sampling_policy(self.num_seen_examples, self.buffer_size,
+            index = self.sampling_policy(self.num_seen_examples, self.buffer_size, unique_map=self.unique_map,
                         labels=self.labels if hasattr(self, 'labels') else None, proposed_class=labels[i])
-            self.num_seen_examples += 1
+            
             if index >= 0:
+                self.update_unique_map(labels[i], self.labels[index] if index < self.num_seen_examples else None)
                 self.examples[index] = examples[i].to(self.device)
                 if labels is not None:
                     self.labels[index] = labels[i].to(self.device)
@@ -109,6 +119,7 @@ class Buffer:
                     self.logits[index] = logits[i].to(self.device)
                 if task_labels is not None:
                     self.task_labels[index] = task_labels[i].to(self.device)
+            self.num_seen_examples += 1
 
     def get_data(self, size: int, transform: transforms=None) -> Tuple:
         """
