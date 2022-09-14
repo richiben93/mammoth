@@ -15,7 +15,7 @@ class EgapModel(ContinualModel):
                             help='Size of pre-dataset minibatch replay (for x, lats and dists).')
         parser.add_argument('--replay_mode', type=str, required=True, help='What you replay.',
                             choices=['none', 'egap', 'egap2', 'egap2-1', 'egap2+1', 'egap3', 'egap2m',
-                                     'egapB2'])
+                                     'egapB2', 'egapB2-1'])
 
         parser.add_argument('--replay_weight', type=float, required=True, help='Weight of replay.')
 
