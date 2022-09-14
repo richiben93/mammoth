@@ -23,6 +23,7 @@ class EgapModel(ContinualModel):
         parser.add_argument('--cos_dist', action='store_true', help='Use cosine distance.')
         parser.add_argument('--knn_laplace', type=int, default=10,
                             help='K of knn to build the graph for laplacian.')
+        parser.add_argument('--b_nclasses', default=None, type=int, help='number of classes to be drawn in egap2b')
         return parser
 
     def __init__(self, backbone, loss, args, transform):
@@ -36,11 +37,16 @@ class EgapModel(ContinualModel):
         self.buffer = Buffer(self.args.buffer_size, self.device, mode='balancoir') \
             if self.args.replay_mode[4] == 'B' else Buffer(self.args.buffer_size, self.device)
 
+        if self.args.replay_mode[4] == 'B':
+            self.nc = self.args.b_nclasses if self.args.b_nclasses is not None else slef.N_CLASSES_PER_TASK
+
     def get_name(self):
         return self.NAME.capitalize() + self.get_name_extension()
 
     def get_name_extension(self):
         name = self.args.replay_mode.capitalize()
+        if self.args.replay_mode[4] == 'B':
+            name += f'NC{self.nc}'
         if self.args.cos_dist:
             name += 'Cos'
         if self.args.heat_kernel:
@@ -56,7 +62,7 @@ class EgapModel(ContinualModel):
             buffer_data = self.buffer.get_all_data(self.transform)
         elif self.args.replay_mode[4] == 'B':
             buffer_data = self.buffer.get_balanced_data(self.args.rep_minibatch, transform=self.transform,
-                                                        n_classes=self.N_CLASSES_PER_TASK)
+                                                        n_classes=self.nc)
         else:
             buffer_data = self.buffer.get_data(self.args.rep_minibatch, self.transform)
         inputs, labels = buffer_data[0], buffer_data[1]
@@ -71,7 +77,7 @@ class EgapModel(ContinualModel):
 
         L = torch.eye(A.shape[0], device=A.device) - normalize_A(A, D)
 
-        n = self.N_CLASSES_PER_TASK if self.args.replay_mode[4] == 'B' else self.N_CLASSES_PER_TASK * self.task
+        n = self.nc if self.args.replay_mode[4] == 'B' else self.N_CLASSES_PER_TASK * self.task
         # evals = torch.linalg.eigvalsh(L)
         evals, _ = find_eigs(L, n_pairs=min(2*n, len(L)))
 
