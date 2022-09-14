@@ -105,6 +105,9 @@ class EgapModel(ContinualModel):
         if self.args.replay_mode == 'egap3':
             return evals[:n].mean()
 
+        if self.args.replay_mode == 'egapB2-1':
+            return evals[:n].sum() - evals[n]
+
         if self.args.replay_mode == 'egapB2':
             return evals[:n + 1].sum() - evals[n + 1]
 
