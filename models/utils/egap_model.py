@@ -38,7 +38,7 @@ class EgapModel(ContinualModel):
             if self.args.replay_mode[4] == 'B' else Buffer(self.args.buffer_size, self.device)
 
         if self.args.replay_mode[4] == 'B':
-            self.nc = self.args.b_nclasses if self.args.b_nclasses is not None else slef.N_CLASSES_PER_TASK
+            self.nc = self.args.b_nclasses if self.args.b_nclasses is not None else self.N_CLASSES_PER_TASK
 
     def get_name(self):
         return self.NAME.capitalize() + self.get_name_extension()
@@ -46,7 +46,7 @@ class EgapModel(ContinualModel):
     def get_name_extension(self):
         name = self.args.replay_mode.capitalize()
         if self.args.replay_mode[4] == 'B':
-            name += f'NC{self.nc}'
+            name += f'NC{self.args.b_nclasses if self.args.b_nclasses is not None else self.N_CLASSES_PER_TASK}'
         if self.args.cos_dist:
             name += 'Cos'
         if self.args.heat_kernel:

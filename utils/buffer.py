@@ -153,13 +153,26 @@ class Buffer:
         if size > min(self.num_seen_examples, self.examples.shape[0]):
             size = min(self.num_seen_examples, self.examples.shape[0])
 
-        tot_classes, class_counts = torch.unique(self.labels, return_counts=True)
+        tot_classes, class_counts = torch.unique(self.labels[:self.num_seen_examples], return_counts=True)
         if n_classes == -1:
             n_classes = len(tot_classes)
-        size_per_class = torch.full([n_classes], size // n_classes)
-        size_per_class[:size % n_classes] += 1
-        selected = tot_classes[class_counts >= size_per_class[0]]
-        selected = selected[torch.randperm(len(selected))[:n_classes]]
+
+        
+        finished = False
+        selected = tot_classes
+        while not finished:
+            n_classes = min(n_classes, len(selected))
+            size_per_class = torch.full([n_classes], size // n_classes)
+            size_per_class[:size % n_classes] += 1
+            selected = tot_classes[class_counts >= size_per_class[0]]
+            if n_classes <= len(selected):
+                finished = True
+            if len(selected) == 0:
+                print('WARNING: no class has enough examples')
+                return self.get_data(0, transform)
+
+        selected = tot_classes[torch.randperm(len(selected))[:n_classes]]
+
         choice = []
         for i, id_class in enumerate(selected):
             choice += np.random.choice(torch.where(self.labels == id_class)[0].cpu(),
