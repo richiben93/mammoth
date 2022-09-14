@@ -171,11 +171,11 @@ class Buffer:
                 print('WARNING: no class has enough examples')
                 return self.get_data(0, transform)
 
-        selected = tot_classes[torch.randperm(len(selected))[:n_classes]]
+        selected = selected[torch.randperm(len(selected))[:n_classes]]
 
         choice = []
         for i, id_class in enumerate(selected):
-            choice += np.random.choice(torch.where(self.labels == id_class)[0].cpu(),
+            choice += np.random.choice(torch.where(self.labels[:self.num_seen_examples] == id_class)[0].cpu(),
                                        size=size_per_class[i].item(),
                                        replace=False).tolist()
         choice = np.array(choice)
@@ -241,3 +241,4 @@ class Buffer:
             if hasattr(self, attr_str):
                 setattr(self, attr_str, getattr(self, attr_str).to(device))
         return self
+
