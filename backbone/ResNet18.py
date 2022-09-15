@@ -215,9 +215,9 @@ def resnet32(nclasses: int, nf: int = 64, **kwargs) -> ResNet:
     return model
 
 lopez_logo = '''**************************
-*                          *
-*  USING LOPEZNET          *
-*                          *
+*                        *
+*  USING LOPEZNET        *
+*                        *
 **************************'''
 
 def lopeznet(nclasses: int) -> ResNet:

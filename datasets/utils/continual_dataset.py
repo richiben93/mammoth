@@ -128,7 +128,7 @@ def store_masked_loaders(train_dataset: datasets, test_dataset: datasets,
 
     if 'MAMMOTH_RANK' not in os.environ:
         train_loader = DataLoader(train_dataset,
-                                  batch_size=setting.args.batch_size, shuffle=True, num_workers=4)
+                                  batch_size=setting.args.batch_size, shuffle=True, num_workers=4, persistent_workers=True)
     else:
         train_loader = DataLoader(train_dataset,
                                   batch_size=setting.args.batch_size,
@@ -138,7 +138,7 @@ def store_masked_loaders(train_dataset: datasets, test_dataset: datasets,
         #                         batch_size=setting.args.batch_size, num_workers=4, sampler=torch.utils.data.DistributedSampler(train_dataset, shuffle=False))
     if not 'MAMMOTH_SLAVE' in os.environ:
         test_loader = DataLoader(test_dataset,
-                                 batch_size=setting.args.batch_size, shuffle=False)
+                                 batch_size=setting.args.batch_size, shuffle=False, num_workers=4, persistent_workers=True)
     else:
         test_loader = None
     setting.test_loaders.append(test_loader)
