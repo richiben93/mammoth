@@ -202,7 +202,7 @@ class SequentialCIFAR100_20x5(ContinualDataset):
     @staticmethod
     def get_backbone(hookme=False, future_classes=0):
 
-        return resnet32(SequentialCIFAR100_20x5.N_CLASSES_PER_TASK
+        return lopeznet(SequentialCIFAR100_20x5.N_CLASSES_PER_TASK
                         * SequentialCIFAR100_20x5.N_TASKS + future_classes)
 
     @staticmethod
