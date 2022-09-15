@@ -35,9 +35,9 @@ class EgapModel(ContinualModel):
         super(EgapModel, self).__init__(backbone, loss, args, transform)
 
         self.buffer = Buffer(self.args.buffer_size, self.device, mode='balancoir') \
-            if self.args.replay_mode[4] == 'B' else Buffer(self.args.buffer_size, self.device)
+            if len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B' else Buffer(self.args.buffer_size, self.device)
 
-        if self.args.replay_mode[4] == 'B':
+        if len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B':
             self.nc = self.args.b_nclasses if self.args.b_nclasses is not None else self.N_CLASSES_PER_TASK
 
     def get_name(self):
@@ -45,7 +45,7 @@ class EgapModel(ContinualModel):
 
     def get_name_extension(self):
         name = self.args.replay_mode.capitalize()
-        if self.args.replay_mode[4] == 'B':
+        if len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B':
             name += f'NC{self.args.b_nclasses if self.args.b_nclasses is not None else self.N_CLASSES_PER_TASK}'
         if self.args.cos_dist:
             name += 'Cos'
@@ -60,7 +60,7 @@ class EgapModel(ContinualModel):
             return torch.tensor(0., dtype=torch.float, device=self.device)
         if self.args.rep_minibatch == self.args.buffer_size:
             buffer_data = self.buffer.get_all_data(self.transform)
-        elif self.args.replay_mode[4] == 'B':
+        elif len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B':
             buffer_data = self.buffer.get_balanced_data(self.args.rep_minibatch, transform=self.transform,
                                                         n_classes=self.nc)
         else:
@@ -77,7 +77,7 @@ class EgapModel(ContinualModel):
 
         L = torch.eye(A.shape[0], device=A.device) - normalize_A(A, D)
 
-        n = self.nc if self.args.replay_mode[4] == 'B' else self.N_CLASSES_PER_TASK * self.task
+        n = self.nc if len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B' else self.N_CLASSES_PER_TASK * self.task
         # evals = torch.linalg.eigvalsh(L)
         evals, _ = find_eigs(L, n_pairs=min(2*n, len(L)))
 
