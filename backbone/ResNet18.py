@@ -214,6 +214,12 @@ def resnet32(nclasses: int, nf: int = 64, **kwargs) -> ResNet:
     model = ResNet(BasicBlock, [5, 4, 3, 2], nclasses, nf)
     return model
 
+lopez_logo = '''**************************
+*                          *
+*  USING LOPEZNET          *
+*                          *
+**************************'''
 
 def lopeznet(nclasses: int) -> ResNet:
+    print(lopez_logo)
     return ResNet(BasicBlock, [2, 2, 2, 2], nclasses, 20)
