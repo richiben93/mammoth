@@ -1,6 +1,7 @@
 *.gif
 *.pdf
 log/
+data
 data/
 checkpoints/
 checkpoints_today/
