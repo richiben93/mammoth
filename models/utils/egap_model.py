@@ -45,6 +45,8 @@ class EgapModel(ContinualModel):
 
     def get_name_extension(self):
         name = self.args.replay_mode.capitalize()
+        if self.args.replay_weight == 0:
+            return name
         if len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B':
             name += f'NC{self.args.b_nclasses if self.args.b_nclasses is not None else self.N_CLASSES_PER_TASK}'
         if self.args.cos_dist:

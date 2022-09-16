@@ -30,47 +30,32 @@ class ErACE(ContinualModel):
         super(ErACE, self).__init__(backbone, loss, args, transform)
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.seen_so_far = torch.tensor([]).long().to(self.device)
-        dataset = get_dataset(args)
-        self.n_tasks = dataset.N_TASKS
-        self.num_classes = dataset.N_TASKS * dataset.N_CLASSES_PER_TASK
-        self.task = 0
-        self.wblog = WandbLogger(args)
-
-    def end_task(self, dataset):
-        self.task += 1
 
     def observe(self, inputs, labels, not_aug_inputs):
-        wandb_log = {'loss': None, 'task': self.task}
+        self.opt.zero_grad()
         present = labels.unique()
         self.seen_so_far = torch.cat([self.seen_so_far, present]).unique()
 
         logits = self.net(inputs)
         mask = torch.zeros_like(logits)
         mask[:, present] = 1
-
-        self.opt.zero_grad()
-        if self.seen_so_far.max() < (self.num_classes - 1):
+        if self.seen_so_far.max() < (self.N_CLASSES - 1):
             mask[:, self.seen_so_far.max():] = 1
-
         if self.task > 0:
             logits = logits.masked_fill(mask == 0, torch.finfo(logits.dtype).min)
 
         loss = self.loss(logits, labels)
-        loss_re = torch.tensor(0.)
 
         if self.task > 0:
             # sample from buffer
             buf_inputs, buf_labels = self.buffer.get_data(self.args.minibatch_size, transform=self.transform)
             loss_re = self.loss(self.net(buf_inputs), buf_labels)
-
-        loss += loss_re
-        wandb_log['loss'] = loss.item()
+            self.wb_log['erace_loss'] = loss_re.item()
+            loss += loss_re
 
         loss.backward()
         self.opt.step()
 
         self.buffer.add_data(examples=not_aug_inputs, labels=labels)
-
-        self.wblog({'training': wandb_log})
 
         return loss.item()
