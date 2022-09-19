@@ -13,6 +13,7 @@ from argparse import Namespace
 from models.utils.continual_model import ContinualModel
 from datasets.utils.continual_dataset import ContinualDataset
 from typing import Tuple
+from utils.metrics import forgetting
 from datasets import get_dataset
 import sys
 
@@ -88,13 +89,6 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         #csv_logger = CsvLogger(dataset.SETTING, dataset.NAME, model.NAME)
         csv_logger = DictxtLogger(dataset.SETTING, dataset.NAME, model.NAME)
 
-    dataset_copy = get_dataset(args)
-    for t in range(dataset.N_TASKS):
-        model.net.train()
-        _, _ = dataset_copy.get_data_loaders()
-    if model.NAME != 'icarl' and model.NAME != 'pnn' and model.NAME != 'cpn'and not model.NAME.startswith('icarl'):
-        random_results_class, random_results_task = evaluate(model, dataset_copy)
-
     print(file=sys.stderr)
     for t in range(dataset.N_TASKS):
         model.reset_scheduler()
@@ -102,11 +96,6 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         train_loader, test_loader = dataset.get_data_loaders()
         if hasattr(model, 'begin_task'):
             model.begin_task(dataset)
-        if t:
-            accs = evaluate(model, dataset, last=True)
-            results[t-1] = results[t-1] + accs[0]
-            if dataset.SETTING == 'class-il':
-                results_mask_classes[t-1] = results_mask_classes[t-1] + accs[1]
         for epoch in range(args.n_epochs):
             for i, data in enumerate(train_loader):
                 if hasattr(dataset.train_loader.dataset, 'logits'):
@@ -141,6 +130,8 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         mean_acc = np.mean(accs, axis=1)
         if hasattr(model, 'log_accs'):
             model.log_accs(accs)
+        results.append(accs[0])
+        results_mask_classes.append(accs[1])
 
         cil_acc, til_acc = np.mean(accs, axis=1).tolist()
         log_obj = {
@@ -150,6 +141,11 @@ def train(model: ContinualModel, dataset: ContinualDataset,
             'task': t,
             **model.wb_log,
         }
+        if t > 0:
+            log_obj.update({
+                f'Class-IL forgetting': forgetting(results),
+                f'Task-IL forgetting': forgetting(results_mask_classes)
+            })
         model.log_results.append(log_obj)
         model.wblogger({'testing': log_obj})
         if args.save_checks:
@@ -158,8 +154,6 @@ def train(model: ContinualModel, dataset: ContinualDataset,
             model.save_logs()
         model.wb_log = {}
 
-        results.append(accs[0])
-        results_mask_classes.append(accs[1])
 
         print_mean_accuracy(mean_acc, t + 1, dataset.SETTING)
 
@@ -169,11 +163,11 @@ def train(model: ContinualModel, dataset: ContinualDataset,
             csv_logger.log_fullacc(accs)
 
     if args.csv_log:
-        csv_logger.add_bwt(results, results_mask_classes)
+        # csv_logger.add_bwt(results, results_mask_classes)
         csv_logger.add_forgetting(results, results_mask_classes)
-        if model.NAME != 'icarl' and model.NAME != 'pnn' and model.NAME != 'cpn' and not model.NAME.startswith('icarl'):
-            csv_logger.add_fwt(results, random_results_class,
-                               results_mask_classes, random_results_task)
+        # if model.NAME != 'icarl' and model.NAME != 'pnn' and model.NAME != 'cpn' and not model.NAME.startswith('icarl'):
+        #     csv_logger.add_fwt(results, random_results_class,
+        #                        results_mask_classes, random_results_task)
 
     if args.csv_log:
         csv_logger.write(vars(args))
