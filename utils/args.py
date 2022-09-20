@@ -21,10 +21,16 @@ def add_experiment_args(parser: ArgumentParser) -> None:
 
     parser.add_argument('--lr', type=float, required=True,
                         help='Learning rate.')
+    parser.add_argument('--lr_decay', type=float, default=0.1,
+                        help='Learning rate.')
+    parser.add_argument('--lr_decay_steps', type=lambda s: [] if s == '' else [int(v) for v in s.split(',')],
+                        default='', help='Learning rate.')
     parser.add_argument('--batch_size', type=int, required=True,
                         help='Batch size.')
     parser.add_argument('--n_epochs', type=int, required=True,
                         help='The number of epochs for each task.')
+    parser.add_argument('--distributed', action='store_true',
+                        help='Use multiple gpus.')
 
 
 def add_management_args(parser: ArgumentParser) -> None:

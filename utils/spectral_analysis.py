@@ -2,6 +2,7 @@ import torch
 from xitorch.linalg import symeig
 from xitorch import LinearOperator
 from utils.knn import NeuralNearestNeighbors
+import math
 
 
 def calc_ADL_from_dist(dist_matrix: torch.Tensor, sigma=1.):
@@ -13,16 +14,18 @@ def calc_ADL_from_dist(dist_matrix: torch.Tensor, sigma=1.):
     L = D - A
     return A, D, L
 
+
 def calc_euclid_dist(data: torch.Tensor):
     return ((data.unsqueeze(0) - data.unsqueeze(1)) ** 2).sum(-1)
 
 def calc_cos_dist(data):
     return -torch.cosine_similarity(data.unsqueeze(0), data.unsqueeze(1), dim=-1)
 
+
 def calc_dist_weiss(nu: torch.Tensor, logvar: torch.Tensor):
     var = logvar.exp()
     edist = calc_euclid_dist(nu)
-    wdiff = (var.unsqueeze(0) + var.unsqueeze(1) -2*(torch.sqrt(var.unsqueeze(0)*var.unsqueeze(1)))).sum(-1)
+    wdiff = (var.unsqueeze(0) + var.unsqueeze(1) - 2 * (torch.sqrt(var.unsqueeze(0) * var.unsqueeze(1)))).sum(-1)
     return edist + wdiff
 
 def calc_ADL_heat(dist_matrix: torch.Tensor, sigma=1.):
@@ -36,9 +39,10 @@ def calc_ADL_heat(dist_matrix: torch.Tensor, sigma=1.):
     L = D - A
     return A, D, L
 
+
 def calc_ADL_knn(distances: torch.Tensor, k: int, symmetric: bool = True):
     new_A = torch.clone(distances)
-    new_A[torch.eye(len(new_A)).bool()] = +torch.inf
+    new_A[torch.eye(len(new_A)).bool()] = +math.inf
 
     knn = NeuralNearestNeighbors(k)
 
@@ -50,12 +54,14 @@ def calc_ADL_knn(distances: torch.Tensor, k: int, symmetric: bool = True):
     final_A = torch.zeros_like(new_A)
     idxes = new_A.topk(k, largest=False)[1]
     final_A[torch.arange(len(idxes)).unsqueeze(1), idxes] = 1
+    # backpropagation trick
     w = knn(-new_A.unsqueeze(0)).squeeze().sum(-1)
     if symmetric:
+        # final_A += final_A.T
         final_A = ((final_A + final_A.T) > 0).float()
         w = w + w.T
 
-    # backpropagation trick
+    # Ahk, _, _ = calc_ADL_from_dist(distances, sigma=1)
     A = final_A.detach() + (w - w.detach())
     # A = final_A
 
@@ -67,23 +73,26 @@ def calc_ADL_knn(distances: torch.Tensor, k: int, symmetric: bool = True):
     L = D - A
     return A, D, L
 
+
 def calc_ADL(data: torch.Tensor, sigma=1.):
     return calc_ADL_from_dist(calc_euclid_dist(data), sigma)
 
-def find_eigs(laplacian: torch.Tensor, n_pairs:int=0, largest=False):
+
+def find_eigs(laplacian: torch.Tensor, n_pairs: int = 0, largest=False):
     # n_pairs = 0
     if n_pairs > 0:
         # eigenvalues, eigenvectors = torch.lobpcg(laplacian, n_pairs, largest=torch.tensor([largest]))
-        # eigenvalues, eigenvectors = LOBPCG2.apply(laplacian, n_pairs)
+        # eigenvalues, eigenvectors = LOBPCG2.apply(laplacian, n_pairs) #todo: debug from here
         eigenvalues, eigenvectors = symeig(LinearOperator.m(laplacian, True), n_pairs)
     else:
-        eigenvalues, eigenvectors = torch.linalg.eigh(laplacian)
         # eigenvalues = eigenvalues.to(float)
+        eigenvalues, eigenvectors = torch.linalg.eigh(laplacian)
         # eigenvectors = eigenvectors.to(float)
         sorted_indices = torch.argsort(eigenvalues, descending=largest)
-        eigenvalues, eigenvectors = eigenvalues[sorted_indices], eigenvectors[:,sorted_indices]
+        eigenvalues, eigenvectors = eigenvalues[sorted_indices], eigenvectors[:, sorted_indices]
 
     return eigenvalues, eigenvectors
+
 
 def calc_energy_from_values(values: torch.Tensor, norm=False):
     nsamples = len(values)
@@ -92,12 +101,14 @@ def calc_energy_from_values(values: torch.Tensor, norm=False):
     energy_p = dir_energy / max_value
     return energy_p.cpu().item()
 
+
 def normalize_A(A, D):
     inv_d = torch.diag(D[torch.eye(len(D)).bool()].pow(-0.5))
     assert not torch.isinf(inv_d).any(), 'D^-0.5 contains inf'
     # inv_d[torch.isinf(inv_d)] = 0
     # return torch.sqrt(torch.linalg.inv(D)) @ A @ torch.sqrt(torch.linalg.inv(D))
     return inv_d @ A @ inv_d
+
 
 def dir_energy_normal(data: torch.Tensor, sigma=1.):
     A, D, L = calc_ADL(data, sigma)
@@ -106,13 +117,15 @@ def dir_energy_normal(data: torch.Tensor, sigma=1.):
     energy = calc_energy_from_values(eigenvalues, norm=True)
     return energy, eigenvalues, eigenvectors
 
+
 def dir_energy(data: torch.Tensor, sigma=1):
     A, D, L = calc_ADL(data, sigma=sigma)
     eigenvalues, eigenvectors = find_eigs(L)
     energy = calc_energy_from_values(eigenvalues)
     return energy
 
-def laplacian_analysis(data: torch.Tensor, sigma=1., knn=0, logvars: torch.Tensor=None,
+
+def laplacian_analysis(data: torch.Tensor, sigma=1., knn=0, logvars: torch.Tensor = None,
                        norm_lap=False, norm_eigs=False, n_pairs=0):
     if logvars is None:
         distances = calc_euclid_dist(data)
@@ -133,7 +146,7 @@ def laplacian_analysis(data: torch.Tensor, sigma=1., knn=0, logvars: torch.Tenso
 
 class LOBPCG2(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, A: torch.Tensor, k:int):
+    def forward(ctx, A: torch.Tensor, k: int):
         e, v = torch.lobpcg(A, k=k, largest=False)
         res = (A @ v) - (v @ torch.diag(e))
         assert (res.abs() < 1e-3).all(), 'A v != e v => incorrect eigenpairs'

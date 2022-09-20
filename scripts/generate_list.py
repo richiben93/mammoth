@@ -1,28 +1,46 @@
 import os
 import sys
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from random import randint
 
 from typing import List
 
-grid = {
-    "dataset": ["seq-cifar10"],  # "seq-cifar100-10x10"],
+
+#--dataset seq-cifar100-10x10 --model joint_replay --batch_size 128 --lr 0.1 --n_epochs 1 --buffer_size 2000 --minibatch_size 64 --rep_minibatch 512 --knn_laplace 20 --fmap_dim 120 --replay_mode egap3 --replay_weight 0.1
+
+common_props = {"output": "sbatch/mammoth/list_sbatch.txt", "title": None}
+common_grid = {
+    "dataset": ["seq-cifar100-10x10"],  # "seq-cifar100-10x10"],
     "wandb": [True],
-    "model": ["er_ace_replay"],
-    "batch_size": ["128"],
+    "batch_size": ["32"],
     "lr": ["0.1"],
-    "n_epochs": ["20"],
+    "n_epochs": ["50"],
+    "lr_decay_steps": ["35,45"],
     "buffer_size": ["2000"],
-    "minibatch_size": ["128"],
-    "rep_minibatch": ["512"],
-    "heat_kernel": [False, True],
-    "knn_laplace": ["10"],
-    "fmap_dim": ["20"],
-    "replay_mode": ["eval", "evectors"],
-    "cos_dist": [False, True],
-    "replay_weight": ["0.1"],
+    "minibatch_size": ["32"],
     "save_checks": [],
+    "custom_log": [],
 }
+
+props = {**common_props, "title": "erace - egap2", "comment_previous": True}
+grid = {
+    **common_grid,
+    "model": ["er_ace_replay"],  # "joint_replay", "er_ace_replay"],
+    "lr": ["0.1", "0.03"],
+    "rep_minibatch": ["512"],
+    "heat_kernel": [],
+    "knn_laplace": ["20"],
+    "fmap_dim": ["160"],
+    "replay_mode": ["egap2"],    # egap2 egap2-1 egap3
+    "cos_dist": [True, False],
+    "replay_weight": ["0.01", "0.001"],
+    "save_checks": [],
+    "custom_log": [],
+}
+
+# cscct
+# grid = {
+# }
 
 
 # "   ".rjust(len(key), ' ')
@@ -61,11 +79,12 @@ for key, values in grid.items():
 #     lines[i] = lines[i][1:]
 print(f"{len(lines)} lines generated")
 
-parser = ArgumentParser(description='Generate list for srv-sbatch', allow_abbrev=False)
-parser.add_argument('--output', type=str, required=False, help='File in which to insert sbatch lines (default stdout).')
-parser.add_argument('--title', type=str, required=False, help='Add title (comment in output).')
-parser.add_argument('--comment_previous', action='store_true', help='Comment previous lines in output file.')
-args = parser.parse_args()
+# parser = ArgumentParser(description='Generate list for srv-sbatch', allow_abbrev=False)
+# parser.add_argument('--output', type=str, required=False, help='File in which to insert sbatch lines (default stdout).')
+# parser.add_argument('--title', type=str, required=False, help='Add title (comment in output).')
+# parser.add_argument('--comment_previous', action='store_true', help='Comment previous lines in output file.')
+# args = parser.parse_args(props)
+args = Namespace(**props)
 
 if args.title is not None:
     lines.insert(0, f"## {args.title}")
@@ -78,8 +97,9 @@ else:
             prev_lines = [line for line in f.readlines()]
         with open(args.output, 'w') as f:
             for line in prev_lines:
-                f.write(line if line.startswith("#") else "#"+line)
+                f.write(line if line.startswith("#") or line == '\n' else "#"+line)
     with open(args.output, 'a') as f:
+        f.write("\n")
         f.write("\n".join(lines))
         f.write("\n")
     print(f"{len(lines)} lines written to {args.output}")

@@ -180,34 +180,6 @@ class ErACEPreReplay(PretrainedConsolidationModel):
     def end_task(self, dataset):
         self.task += 1
 
-    def log_accs(self, accs):
-        cil_acc, til_acc = np.mean(accs, axis=1).tolist()
-        pre_acc = self.pre_dataset_train_head()
-
-        assert pre_acc > 0.5, f'Accuracy on pretrain too low: \n{pre_acc}'
-
-        # running consolidation error
-        with torch.no_grad():
-            replay_error = self.get_replay_loss()
-
-        log_obj = {
-            'Class-IL mean': cil_acc, 'Task-IL mean': til_acc, 'Con-Error': replay_error,
-            'PreTrain-acc': pre_acc,
-            **{f'Class-IL task-{i + 1}': acc for i, acc in enumerate(accs[0])},
-            **{f'Task-IL task-{i + 1}': acc for i, acc in enumerate(accs[1])},
-            'task': self.task,
-        }
-        self.log_results.append(log_obj)
-        self.wblog({'testing': log_obj})
-        self.add_log_latents()
-        self.save_checkpoint(self.task)
-
-        # if self.task > 2 and self.args.save_checks:
-        #     self.end_training()
-        #     exit()
-
-        if self.task == self.N_TASKS:
-            self.end_training()
 
     @torch.no_grad()
     def add_log_latents(self):

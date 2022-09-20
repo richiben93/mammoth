@@ -13,6 +13,7 @@ from datasets import get_dataset
 from utils.wandbsc import WandbLogger, innested_vars
 from utils.conf import base_path
 import os
+from torch.optim.lr_scheduler import MultiStepLR
 import pickle
 
 
@@ -31,8 +32,9 @@ class ContinualModel(nn.Module):
         self.loss = loss
         self.args = args
         self.transform = transform
-        self.opt = SGD(self.net.parameters(), lr=self.args.lr)
         self.device = get_device()
+        self.opt = SGD(self.net.parameters(), lr=self.args.lr)
+        self.scheduler = None
 
         dataset = get_dataset(args)
         self.N_TASKS = dataset.N_TASKS
@@ -47,7 +49,7 @@ class ContinualModel(nn.Module):
         self.task = 0
 
     def get_name(self):
-        return self.NAME
+        return self.NAME.capitalize()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -96,3 +98,12 @@ class ContinualModel(nn.Module):
         with open(os.path.join(log_dir, filename), 'a') as f:
             f.write(str(obj) + '\n')
         return log_dir
+
+    def reset_scheduler(self):
+        if len(self.args.lr_decay_steps) > 0 and self.args.n_epochs > 1:
+            self.opt = SGD(self.net.parameters(), lr=self.args.lr)
+            self.scheduler = MultiStepLR(self.opt, milestones=self.args.lr_decay_steps, gamma=self.args.lr_decay)
+
+    def scheduler_step(self):
+        if self.scheduler is not None:
+            self.scheduler.step()

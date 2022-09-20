@@ -5,7 +5,7 @@
 import torch
 from torch.nn import functional as F
 from utils.args import *
-from models.utils.replay_model import ReplayModel
+from models.utils.egap_model import EgapModel
 
 
 def get_parser() -> ArgumentParser:
@@ -22,18 +22,18 @@ def get_parser() -> ArgumentParser:
     parser.add_argument('--grad_clip', default=0, type=float, help='Clip the gradient.')
 
     # --replay_mode, --replay_weight, --rep_minibatch, 
-    # --graph_sym, --heat_kernel, --cos_dist, --knn_laplace, --fmap_dim
-    ReplayModel.add_replay_args(parser) 
+    # --heat_kernel, --cos_dist, --knn_laplace
+    EgapModel.add_replay_args(parser)
     
     return parser
 
 
-class DerppReplay(ReplayModel):
-    NAME = 'derpp_replay'
+class DerppEgap(EgapModel):
+    NAME = 'derpp_egap'
     COMPATIBILITY = ['class-il', 'domain-il', 'task-il', 'general-continual']
 
     def __init__(self, backbone, loss, args, transform):
-        super(DerppReplay, self).__init__(backbone, loss, args, transform)
+        super(DerppEgap, self).__init__(backbone, loss, args, transform)
 
     def get_name(self):
         return 'Derpp' + self.get_name_extension()
@@ -61,7 +61,7 @@ class DerppReplay(ReplayModel):
         if self.task > 0 and self.args.buffer_size > 0:
             if self.args.rep_minibatch > 0 and self.args.replay_weight > 0:
                 replay_loss = self.get_replay_loss()
-                self.wb_log['replay_loss'] = replay_loss.item()
+                self.wb_log['egap_loss'] = replay_loss.item()
                 loss += replay_loss * self.args.replay_weight
 
         loss.backward()
