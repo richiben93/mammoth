@@ -81,7 +81,7 @@ class ContinualModel(nn.Module):
         log_dir = os.path.join(base_path(), 'checkpoints', self.dataset_name, f'{self.args.name}-{self.wblogger.run_id}')
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-        if self.task == 0:
+        if self.task == 1:
             with open(os.path.join(log_dir, 'args.pyd'), 'w') as f:
                 f.write(str(innested_vars(self.args)))
         torch.save(self.net.state_dict(), f'{log_dir}/task_{self.task}.pt')
