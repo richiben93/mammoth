@@ -23,7 +23,7 @@ def get_parser() -> ArgumentParser:
 
     parser.add_argument('--wd_reg', type=float, default=0.0005,
                         help='L2 regularization applied to the parameters.')
-    parser.add_argument('--lambda_c', type=float, default=3,
+    parser.add_argument('--lambda_c', type=float, default=5,
                         help='L2 regularization applied to the parameters.')
     parser.add_argument('--lambda_f', type=float, default=1,
                         help='L2 regularization applied to the parameters.')
@@ -251,6 +251,8 @@ class PodNet2(ContinualModel):
         self.loss = PodNetLoss(self.args.delta, self.num_classes, self.device)
 
         self.i = 0
+        self.lambda_c = 1.
+        self.lambda_f = 1.
 
     def forward(self, x):
         if self.class_means is None:
@@ -300,7 +302,8 @@ class PodNet2(ContinualModel):
         else:
             l_pod_spatial = torch.tensor(0.).to(self.device)
             l_pod_flat = torch.tensor(0.).to(self.device)
-        loss = class_loss + self.args.lambda_c * l_pod_spatial + self.args.lambda_f * l_pod_flat
+
+        loss = class_loss + self.lambda_c * l_pod_spatial + self.lambda_f * l_pod_flat
 
         loss.backward()
 
@@ -334,8 +337,8 @@ class PodNet2(ContinualModel):
             raise ValueError('Podnet works only with cosine annealing')
         self.net.classifier.expand(dataset.N_CLASSES_PER_TASK)
         if self.current_task > 0:
-            self.args.lambda_c *= (dataset.N_CLASSES_PER_TASK * self.current_task / self.N_CLASSES_PER_TASK) ** 0.5
-            self.args.lambda_f *= (dataset.N_CLASSES_PER_TASK * self.current_task / self.N_CLASSES_PER_TASK) ** 0.5
+            self.lambda_c = self.args.lambda_c*(dataset.N_CLASSES_PER_TASK * self.current_task / self.N_CLASSES_PER_TASK) ** 0.5
+            self.lambda_f = self.args.lambda_f*(dataset.N_CLASSES_PER_TASK * self.current_task / self.N_CLASSES_PER_TASK) ** 0.5
             with torch.no_grad():
                 with bn_track_stats(self.old_net, False):
                     self.net.classifier.imprint(self.old_net, dataset.train_loader)
@@ -349,13 +352,8 @@ class PodNet2(ContinualModel):
                         for i in range(self.buffer.num_seen_examples)]).squeeze(1)])
             else:
                 dataset.train_loader.dataset.data = np.concatenate(
-                    [dataset.train_loader.dataset.data, torch.stack([((
-                                                                              self.buffer.examples[i] * 255).type(
-                        torch.uint8).cpu())
-                                                                     for i in range
-                                                                     (self.buffer.num_seen_examples)]).numpy().swapaxes(
-                        1, 3)])
-        # TODO: prepare new weights
+                    [dataset.train_loader.dataset.data, torch.stack([((self.buffer.examples[i] * 255).type(
+                        torch.uint8).cpu()) for i in range(self.buffer.num_seen_examples)]).numpy().swapaxes(1, 3)])
 
     def end_task(self, dataset) -> None:
         self.old_net = deepcopy(self.net.eval())
