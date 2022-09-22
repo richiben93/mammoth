@@ -21,29 +21,32 @@ def get_parser() -> ArgumentParser:
     add_experiment_args(parser)
     add_rehearsal_args(parser)
 
-    parser.add_argument('--wd_reg', type=float, required=True,
+    parser.add_argument('--wd_reg', type=float, default=0.0005,
                         help='L2 regularization applied to the parameters.')
-    parser.add_argument('--lambda_c', type=float, required=True,
+    parser.add_argument('--lambda_c', type=float, default=3,
                         help='L2 regularization applied to the parameters.')
-    parser.add_argument('--lambda_f', type=float, required=True,
+    parser.add_argument('--lambda_f', type=float, default=1,
                         help='L2 regularization applied to the parameters.')
-    parser.add_argument('--delta', type=float, default=0.5, )
+    parser.add_argument('--delta', type=float, default=0.6, )
     parser.add_argument('--k', type=int, default=10, )
-    parser.add_argument('--scheduler', default='cosine' )
+    parser.add_argument('--scheduler', default='cosine')
+    parser.add_argument('--eta', type=float, default=1.)
+    parser.add_argument('--scaling', type=float, default=3.)
 
     return parser
 
 
 class PodNetClassifier(nn.Module):
-    def __init__(self, in_features, out_features, k):
+    def __init__(self, in_features, out_features, k, scaling=1, eta=None):
         super(PodNetClassifier, self).__init__()
         self.in_features = in_features
         self.k = k
         self.out_features = out_features
-        self.eta = nn.Parameter(torch.ones(1))
+        self.eta = nn.Parameter(torch.ones(1)) if eta is None else eta
         self.theta = nn.Parameter(torch.empty(in_features, k, out_features))
         nn.init.kaiming_uniform_(self.theta, a=math.sqrt(5))
         self.t = 0
+        self.scaling = scaling
 
     def expand(self, num_classes):
         self.t += num_classes
@@ -72,18 +75,60 @@ class PodNetClassifier(nn.Module):
             self.theta[:, :, c] = torch.from_numpy(kmeans.cluster_centers_).to(self.theta.device).T
         print()
 
-    def forward(self, x, with_eta=False):
+    def our_forward(self, x, with_eta=False):
         x = F.normalize(x, dim=1)
         theta = F.normalize(self.theta[:, :, :self.t], dim=0)
         # if theta.sum(0).sum(0).sum() < 0.0001:
         #     print('piccolo theta')
+
         c = torch.einsum('bl,lkc->bkc', x, theta)  # b k c-t
+
         s = F.softmax(c, dim=1)  # b k c-t
         y = (c * s).sum(dim=1)  # b c-t
         if not with_eta:
             return y
         else:
             return y, self.eta
+
+    def forward(self, x, with_eta=False):
+        """Computes the pairwise distance matrix with numerical stability."""
+        theta = self.theta[:, :, :self.t].permute(0, 2, 1).reshape(self.in_features, -1).permute(1, 0)  # c-t in_features
+        theta = self.scaling * F.normalize(theta, dim=-1, p=2)
+        a = self.scaling * F.normalize(x, dim=-1, p=2)
+        mat = torch.cat([a, theta])
+
+        pairwise_distances_squared = torch.add(
+            mat.pow(2).sum(dim=1, keepdim=True).expand(mat.size(0), -1),
+            torch.t(mat).pow(2).sum(dim=0, keepdim=True).expand(mat.size(0), -1)
+        ) - 2 * (torch.mm(mat, torch.t(mat)))
+
+        # Deal with numerical inaccuracies. Set small negatives to zero.
+        pairwise_distances_squared = torch.clamp(pairwise_distances_squared, min=0.0)
+
+        # Get the mask where the zero distances are at.
+        error_mask = torch.le(pairwise_distances_squared, 0.0)
+
+        # Optionally take the sqrt.
+
+        pairwise_distances = pairwise_distances_squared
+
+        # Undo conditionally adding 1e-16.
+        pairwise_distances = torch.mul(pairwise_distances, (error_mask == False).float())
+
+        # Explicitly set diagonals to zero.
+        mask_offdiagonals = 1 - torch.eye(*pairwise_distances.size(), device=pairwise_distances.device)
+        pairwise_distances = torch.mul(pairwise_distances, mask_offdiagonals)
+
+        simi_per_class = -pairwise_distances[:a.shape[0], a.shape[0]:]  # todo - reshape
+        simi_per_class = simi_per_class.view(x.shape[0], simi_per_class.shape[1] // self.k, self.k)
+
+        gamma = 1
+        attentions = F.softmax(gamma * simi_per_class, dim=-1)
+        out = (simi_per_class * attentions).sum(-1)
+        if not with_eta:
+            return out
+        else:
+            return out, self.eta
 
 
 def baguette_fill_buffer(self: ContinualModel, mem_buffer: Buffer, dataset, t_idx: int) -> None:
@@ -192,7 +237,7 @@ class PodNet2(ContinualModel):
         # Instantiate buffers
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.eye = torch.eye(self.dataset.N_CLASSES_PER_TASK *
-                                 self.dataset.N_TASKS).to(self.device)
+                             self.dataset.N_TASKS).to(self.device)
 
         self.class_means = None
         self.old_net = None
@@ -200,10 +245,12 @@ class PodNet2(ContinualModel):
         self.num_classes = self.dataset.N_CLASSES_PER_TASK * self.dataset.N_TASKS
 
         self.net.classifier = PodNetClassifier(
-            self.net.classifier.in_features, self.num_classes, self.args.k)
+            self.net.classifier.in_features, self.num_classes, self.args.k, scaling=args.scaling, eta=args.eta)
 
         self.flatnorm = lambda x, axis: F.normalize(x.pow(2).sum(axis).view(len(x), - 1), dim=1, p=2)
         self.loss = PodNetLoss(self.args.delta, self.num_classes, self.device)
+
+        self.i = 0
 
     def forward(self, x):
         if self.class_means is None:
@@ -243,6 +290,7 @@ class PodNet2(ContinualModel):
 
         feature_set = self.net.forward_all(inputs)
         feats, hs, rawfeat = feature_set['features'], feature_set['attention'][:-1], feature_set['raw_features']
+        # using raw features as the input to the classifier (donnow why)
         logits, eta = self.net.classifier(feats, with_eta=True)
 
         class_loss = self.loss(logits, labels, eta=eta)
@@ -256,8 +304,7 @@ class PodNet2(ContinualModel):
 
         loss.backward()
 
-        torch.nn.utils.clip_grad_value_(self.net.parameters(), 1)
-
+        torch.nn.utils.clip_grad_value_(self.net.parameters(), 5)
         self.opt.step()
 
         self.wb_log['class_loss'] = class_loss.item()
@@ -278,6 +325,9 @@ class PodNet2(ContinualModel):
 
     def begin_task(self, dataset):
         self.opt = torch.optim.SGD(self.net.parameters(), lr=self.args.lr, weight_decay=self.args.wd_reg, momentum=0.9)
+        for p in self.net.parameters():
+            if p.requires_grad:
+                p.register_hook(lambda grad: torch.clamp(grad, -5., 5.))
         if self.args.scheduler == 'cosine':
             self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.opt, self.args.n_epochs)
         else:
