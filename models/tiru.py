@@ -20,12 +20,15 @@ def get_parser() -> ArgumentParser:
 class SingleModule(nn.Module):
     def __init__(self, in_features, out_features, rank):
         super(SingleModule, self).__init__()
-        self.U = nn.Linear(in_features, rank)
-        self.S = self.nn.Linear(rank, rank)
+        self.U = torch.nn.Parameter(data=torch.Tensor(in_features, rank), requires_grad=True)
+        self.U.data.uniform_(-1, 1)
+        self.S = torch.nn.Parameter(data=torch.ones(rank, rank), requires_grad=True)
         self.V = nn.Linear(rank, out_features)
+        self.V = torch.nn.Parameter(data=torch.Tensor(rank, out_features), requires_grad=True)
+        self.V.data.uniform_(-1, 1)
 
     def forward(self, x):
-        return x @ (self.U(x) @ self.S @ self.V(x))
+        return x @ (self.U @ torch.diag(self.S) @ self.V)
 
 
 class Net(nn.Module):
