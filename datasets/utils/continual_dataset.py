@@ -226,7 +226,7 @@ def store_masked_loaders(train_dataset: datasets, test_dataset: datasets,
         current_files_file = os.path.join(train_dataset.root, f'_train_{setting.i}.txt')
         if not os.path.exists(current_files_file):
             with open(current_files_file, 'w') as f:
-                f.write('\n'.join(f"{a} {b}" for (a,b) in zip(train_dataset.data, train_dataset.targets)))
+                f.write('\n'.join(f"{a.replace(train_dataset.root+'/', '')} {b}" for (a,b) in zip(train_dataset.data, train_dataset.targets)))
         # breakpoint()
         pipe = get_dali_pipe(current_files_file, True, num_threads=4, device_id=0,
                                 seed=-1, batch_size=setting.args.batch_size)
@@ -238,7 +238,7 @@ def store_masked_loaders(train_dataset: datasets, test_dataset: datasets,
         if not os.path.exists(current_files_file_te):
             bonifica_nome = lambda x: x.split('val/')[0] + 'val/ILSVRC2012_val_' + x.split('/ILSVRC2012_val_')[-1]
             with open(current_files_file_te, 'w') as f:
-                f.write('\n'.join([f"{bonifica_nome(a)} {b}" for (a,b) in zip(test_dataset.data, test_dataset.targets)]))
+                f.write('\n'.join([f"{bonifica_nome(a.replace(train_dataset.root+'/', ''))} {b}" for (a,b) in zip(test_dataset.data, test_dataset.targets)]))
 
         pipe = get_dali_pipe(current_files_file_te, False, num_threads=2, device_id=0,
                                 seed=-1, batch_size=2)
