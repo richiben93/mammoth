@@ -41,7 +41,7 @@ def base_path() -> str:
     """
     if os.uname().nodename == 'rb_torch':
         return '/data/shared/rb_torch/'
-    elif os.uname().nodename in ('ammarella', 'dragon', 'goku'):
+    elif os.uname().nodename in ('ammarella', 'dragon', 'goku', 'yobama'):
         return './data/'
     else:
         return '/nas/softechict-nas-1/rbenaglia/data/'
@@ -53,7 +53,7 @@ def base_path_dataset() -> str:
     """
     if os.uname().nodename == 'rb_torch':
         return '/data/shared/rb_torch/'
-    elif os.uname().nodename in ('ammarella', 'dragon', 'goku'):
+    elif os.uname().nodename in ('ammarella', 'dragon', 'goku', 'yobama'):
         return './data/'
     else:
         return '/nas/softechict-nas-1/rbenaglia/data/'
