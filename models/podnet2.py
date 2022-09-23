@@ -92,7 +92,8 @@ class PodNetClassifier(nn.Module):
 
     def forward(self, x, with_eta=False):
         """Computes the pairwise distance matrix with numerical stability."""
-        theta = self.theta[:, :, :self.t].permute(0, 2, 1).reshape(self.in_features, -1).permute(1, 0)  # c-t in_features
+        theta = self.theta[:, :, :self.t].permute(0, 2, 1).reshape(self.in_features, -1).permute(1,
+                                                                                                 0)  # c-t in_features
         theta = self.scaling * F.normalize(theta, dim=-1, p=2)
         a = self.scaling * F.normalize(x, dim=-1, p=2)
         mat = torch.cat([a, theta])
@@ -247,7 +248,7 @@ class PodNet2(ContinualModel):
         self.net.classifier = PodNetClassifier(
             self.net.classifier.in_features, self.num_classes, self.args.k, scaling=args.scaling, eta=args.eta)
 
-        self.flatnorm = lambda x, axis: F.normalize(x.pow(2).sum(axis).view(len(x), - 1), dim=1, p=2)
+        self.flatnorm = lambda x, axis: x.pow(2).sum(axis).view(len(x), - 1)
         self.loss = PodNetLoss(self.args.delta, self.num_classes, self.device)
 
         self.i = 0
@@ -298,7 +299,11 @@ class PodNet2(ContinualModel):
         class_loss = self.loss(logits, labels, eta=eta)
         if self.current_task > 0:
             l_pod_spatial = torch.mean(torch.stack([self.pod_spatial_loss(h, ref_h) for h, ref_h in zip(hs, ref_hs)]))
-            l_pod_flat = (F.normalize(rawfeat, dim=1, p=2) - F.normalize(ref_rawfeat, dim=1, p=2)).pow(2).sum()
+            # l_pod_flat = (F.normalize(rawfeat, dim=1, p=2) - F.normalize(ref_rawfeat, dim=1, p=2)).pow(2).sum()
+            l_pod_flat = F.cosine_embedding_loss(
+                rawfeat, ref_rawfeat,
+                torch.ones(rawfeat.shape[0]).to(rawfeat.device)
+            )
         else:
             l_pod_spatial = torch.tensor(0.).to(self.device)
             l_pod_flat = torch.tensor(0.).to(self.device)
@@ -322,9 +327,15 @@ class PodNet2(ContinualModel):
         return -(pred.log() * y + (1 - y) * (1 - pred).log()).mean()
 
     def pod_spatial_loss(self, h, ref_h):
-        l_w = (self.flatnorm(h, axis=2) - self.flatnorm(ref_h, axis=2)).pow(2).sum()
-        l_h = (self.flatnorm(h, axis=3) - self.flatnorm(ref_h, axis=3)).pow(2).sum()
-        return l_w + l_h
+        h_w = self.flatnorm(h, axis=2)
+        h_h = self.flatnorm(h, axis=3)
+        h_w_ref = self.flatnorm(ref_h, axis=2)
+        h_h_ref = self.flatnorm(ref_h, axis=3)
+        hidden = F.normalize(torch.cat([h_w, h_h], dim=-1), dim=1, p=2)
+        ref = F.normalize(torch.cat([h_w_ref, h_h_ref], dim=-1), dim=1, p=2)
+        loss = torch.mean(torch.frobenius_norm(hidden - ref, dim=-1))
+
+        return loss
 
     def begin_task(self, dataset):
         self.opt = torch.optim.SGD(self.net.parameters(), lr=self.args.lr, weight_decay=self.args.wd_reg, momentum=0.9)
@@ -337,8 +348,10 @@ class PodNet2(ContinualModel):
             raise ValueError('Podnet works only with cosine annealing')
         self.net.classifier.expand(dataset.N_CLASSES_PER_TASK)
         if self.current_task > 0:
-            self.lambda_c = self.args.lambda_c*(dataset.N_CLASSES_PER_TASK * self.current_task / self.N_CLASSES_PER_TASK) ** 0.5
-            self.lambda_f = self.args.lambda_f*(dataset.N_CLASSES_PER_TASK * self.current_task / self.N_CLASSES_PER_TASK) ** 0.5
+            self.lambda_c = self.args.lambda_c * (
+                        dataset.N_CLASSES_PER_TASK * (self.current_task + 1) / self.N_CLASSES_PER_TASK) ** 0.5
+            self.lambda_f = self.args.lambda_f * (
+                        dataset.N_CLASSES_PER_TASK * (self.current_task + 1) / self.N_CLASSES_PER_TASK) ** 0.5
             with torch.no_grad():
                 with bn_track_stats(self.old_net, False):
                     self.net.classifier.imprint(self.old_net, dataset.train_loader)
