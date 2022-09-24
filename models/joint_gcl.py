@@ -38,7 +38,7 @@ class JointGCL(ContinualModel):
       self.net = dataset.get_backbone()
       self.net.to(self.device)
       self.net.train()
-      self.opt = SGD(self.net.parameters(), lr=self.args.lr)
+      self.opt = SGD(self.net.parameters(), lr=self.args.lr, momenutm=self.args.lr_momentum)
 
       # gather data
       all_data = torch.cat(self.old_data)

@@ -44,7 +44,7 @@ class HAL(ContinualModel):
         self.dataset = get_dataset(args)
         self.spare_model = self.dataset.get_backbone()
         self.spare_model.to(self.device)
-        self.spare_opt = SGD(self.spare_model.parameters(), lr=self.args.lr)
+        self.spare_opt = SGD(self.spare_model.parameters(), lr=self.args.lr, momentum=self.args.lr_momentum)
 
     def end_task(self, dataset):
         self.task_number += 1
@@ -76,7 +76,7 @@ class HAL(ContinualModel):
 
         for a_class in classes_for_this_task:
             e_t = torch.rand(self.input_shape, requires_grad=True, device=self.device)
-            e_t_opt = SGD([e_t], lr=self.args.lr)
+            e_t_opt = SGD([e_t], lr=self.args.lr, momentum=self.args.lr_momentum)
             print(file=sys.stderr)
             for i in range(self.anchor_optimization_steps):
                 e_t_opt.zero_grad()

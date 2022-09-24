@@ -338,7 +338,7 @@ class PodNet2(ContinualModel):
         return loss
 
     def begin_task(self, dataset):
-        self.opt = torch.optim.SGD(self.net.parameters(), lr=self.args.lr, weight_decay=self.args.wd_reg, momentum=0.9)
+        self.opt = torch.optim.SGD(self.net.parameters(), lr=self.args.lr, weight_decay=self.args.wd_reg, momentum=self.args.lr_momentum)
         for p in self.net.parameters():
             if p.requires_grad:
                 p.register_hook(lambda grad: torch.clamp(grad, -5., 5.))

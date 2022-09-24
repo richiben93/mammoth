@@ -62,7 +62,7 @@ class ErACEDiag(DiagonalModel):
             # replace pretrained model classifier with start classifier
             self.net.classifier = start_classifier
             self.load_buffer()
-            self.opt = SGD(self.net.parameters(), lr=self.args.lr)
+            self.opt = SGD(self.net.parameters(), lr=self.args.lr, momenutm=self.args.lr_momentum)
             self.pm_task(n_epochs=0)
 
     def load_buffer(self):
@@ -181,7 +181,7 @@ class ErACEDiag(DiagonalModel):
         self.new_classifier = nn.Linear(512, 100).to(self.device)
         train_loader = DataLoader(pm_dataset_train,
                                   batch_size=self.args.batch_size)
-        opt = SGD(self.new_classifier.parameters(), lr=self.args.lr)
+        opt = SGD(self.new_classifier.parameters(), lr=self.args.lr, momentum=self.args.lr_momentum)
         for epoch in range(n_epochs):
             for i, data in tqdm(enumerate(train_loader)):
                 opt.zero_grad()
