@@ -62,7 +62,7 @@ class ErACEDiag(DiagonalModel):
             # replace pretrained model classifier with start classifier
             self.net.classifier = start_classifier
             self.load_buffer()
-            self.opt = SGD(self.net.parameters(), lr=self.args.lr, momenutm=self.args.lr_momentum)
+            self.opt = SGD(self.net.parameters(), lr=self.args.lr, momentum=self.args.lr_momentum)
             self.pm_task(n_epochs=0)
 
     def load_buffer(self):
