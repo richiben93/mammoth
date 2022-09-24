@@ -97,6 +97,8 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         if hasattr(model, 'begin_task'):
             model.begin_task(dataset)
         for epoch in range(args.n_epochs):
+            if model.NAME == 'joint':
+                break
             for i, data in enumerate(train_loader):
                 if hasattr(dataset.train_loader.dataset, 'logits'):
                     inputs, labels, not_aug_inputs, logits = data

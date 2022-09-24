@@ -45,7 +45,7 @@ class Joint(ContinualModel):
             self.net = dataset.get_backbone()
             self.net.to(self.device)
             self.net.train()
-            self.opt = SGD(self.net.parameters(), lr=self.args.lr, momentum=self.args.lr_momentum)
+            self.reset_scheduler()
 
             # prepare dataloader
             all_data, all_labels = None, None
@@ -73,6 +73,7 @@ class Joint(ContinualModel):
                     loss.backward()
                     self.opt.step()
                     progress_bar(i, len(loader), e, 'J', loss.item())
+                self.scheduler_step()
         else:
             self.old_data.append(dataset.train_loader)
             # train
