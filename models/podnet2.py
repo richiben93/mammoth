@@ -345,9 +345,8 @@ class PodNet2(ContinualModel):
             if p.requires_grad:
                 p.register_hook(lambda grad: torch.clamp(grad, -5., 5.))
         if self.args.scheduler == 'cosine':
+            print('Warning: overwriting policy with cosine annealing')
             self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.opt, self.args.n_epochs)
-        else:
-            raise ValueError('Podnet works only with cosine annealing')
         self.net.classifier.expand(dataset.N_CLASSES_PER_TASK)
         if self.current_task > 0:
             self.lambda_c = self.args.lambda_c * (
