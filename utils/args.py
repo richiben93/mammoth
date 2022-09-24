@@ -25,6 +25,7 @@ def add_experiment_args(parser: ArgumentParser) -> None:
                         help='Learning rate.')
     parser.add_argument('--lr_decay_steps', type=lambda s: [] if s == '' else [int(v) for v in s.split(',')],
                         default='', help='Learning rate.')
+    parser.add_argument('--lr_momentum', type=float, default=0,)                        
     parser.add_argument('--batch_size', type=int, required=True,
                         help='Batch size.')
     parser.add_argument('--n_epochs', type=int, required=True,

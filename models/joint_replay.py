@@ -56,7 +56,7 @@ class JointReplay(ReplayModel):
             self.net = dataset.get_backbone()
             self.net.to(self.device)
             self.net.train()
-            self.opt = SGD(self.net.parameters(), lr=self.args.lr)
+            self.opt = SGD(self.net.parameters(), lr=self.args.lr, momentum=self.args.lr_momentum)
             self.reset_scheduler()
 
             # prepare dataloader

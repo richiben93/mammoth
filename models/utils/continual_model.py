@@ -33,7 +33,7 @@ class ContinualModel(nn.Module):
         self.args = args
         self.transform = transform
         self.device = get_device()
-        self.opt = SGD(self.net.parameters(), lr=self.args.lr)
+        self.opt = SGD(self.net.parameters(), lr=self.args.lr, momentum=self.args.lr_momentum)
         self.scheduler = None
 
         dataset = get_dataset(args)
@@ -101,7 +101,7 @@ class ContinualModel(nn.Module):
 
     def reset_scheduler(self):
         if len(self.args.lr_decay_steps) > 0 and self.args.n_epochs > 1:
-            self.opt = SGD(self.net.parameters(), lr=self.args.lr)
+            self.opt = SGD(self.net.parameters(), lr=self.args.lr, momentum=self.args.lr_momentum)
             self.scheduler = MultiStepLR(self.opt, milestones=self.args.lr_decay_steps, gamma=self.args.lr_decay)
 
     def scheduler_step(self):

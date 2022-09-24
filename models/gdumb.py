@@ -27,7 +27,6 @@ def get_parser() -> ArgumentParser:
                         help='Penalty weight.')
     parser.add_argument('--cutmix_alpha', type=float, default=None,
                         help='Penalty weight.')
-    parser.add_argument('--optim_mom', type=float, default=0.9)
     parser.add_argument('--optim_wd', type=float, default=5e-4)
     parser.add_argument('--optim_nesterov', action='store_true')
     add_experiment_args(parser)
@@ -37,7 +36,7 @@ def get_parser() -> ArgumentParser:
 def fit_buffer(self, epochs):
     for epoch in range(epochs):
 
-        optimizer = SGD(self.net.parameters(), lr=self.args.maxlr, momentum=self.args.optim_mom,
+        optimizer = SGD(self.net.parameters(), lr=self.args.maxlr, momentum=self.args.lr_momentum,
                         weight_decay=self.args.optim_wd, nesterov=self.args.optim_nesterov)
         scheduler = lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=1, T_mult=2, eta_min=self.args.minlr)
 

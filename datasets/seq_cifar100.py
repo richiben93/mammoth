@@ -6,6 +6,7 @@
 from torchvision.datasets import CIFAR100
 import torchvision.transforms as transforms
 from backbone.ResNet18 import resnet18, lopeznet, resnet32
+from backbone.RebuffiNet import resnet_rebuffi
 import torch.nn.functional as F
 import numpy as np
 from utils.conf import base_path_dataset
@@ -186,7 +187,7 @@ class SequentialCIFAR100_20x5(ContinualDataset):
         # class_order_arr[class_order_arr != -1] = np.random.permutation(class_order_arr[class_order_arr != -1])
 
         train, test = store_masked_loaders(train_dataset, test_dataset, self)
-                                           # class_order_arr)
+        # class_order_arr)
 
         return train, test
 
@@ -362,6 +363,73 @@ class SequentialCIFAR100_3x5(ContinualDataset):
     def get_backbone(hookme=False):
         return lopeznet(SequentialCIFAR100_17x5.N_CLASSES_PER_TASK
                         * SequentialCIFAR100_17x5.N_TASKS)
+
+    @staticmethod
+    def get_loss():
+        return F.cross_entropy
+
+    @staticmethod
+    def get_normalization_transform():
+        transform = transforms.Normalize((0.5071, 0.4867, 0.4408),
+                                         (0.2675, 0.2565, 0.2761))
+        return transform
+
+    @staticmethod
+    def get_denormalization_transform():
+        transform = DeNormalize((0.5071, 0.4867, 0.4408),
+                                (0.2675, 0.2565, 0.2761))
+        return transform
+
+
+class SequentialCIFAR100_50x2(ContinualDataset):
+    NAME = 'seq-cifar100-50x2'
+    SETTING = 'class-il'
+    N_CLASSES_PER_TASK = 50
+    N_TASKS = 2
+    TRANSFORM = transforms.Compose(
+        [transforms.RandomCrop(32, padding=4),
+         transforms.ToTensor(),
+         transforms.Normalize((0.5071, 0.4867, 0.4408),
+                              (0.2675, 0.2565, 0.2761))])
+
+    def get_examples_number(self):
+        train_dataset = MyCIFAR100(base_path_dataset() + 'CIFAR100', train=True,
+                                   download=True)
+        return len(train_dataset.data)
+
+    def get_data_loaders(self):
+        transform = self.TRANSFORM
+
+        test_transform = transforms.Compose(
+            [transforms.ToTensor(), self.get_normalization_transform()])
+
+        train_dataset = MyCIFAR100(base_path_dataset() + 'CIFAR100', train=True,
+                                   download=True, transform=transform)
+        if self.args.validation:
+            train_dataset, test_dataset = get_train_val(train_dataset,
+                                                        test_transform, self.NAME)
+        else:
+            test_dataset = TCIFAR100(base_path_dataset() + 'CIFAR100', train=False,
+                                     download=True, transform=test_transform)
+
+        class_order = []
+
+        train, test = store_masked_loaders(train_dataset, test_dataset, self)
+
+        return train, test
+
+    @staticmethod
+    def get_transform():
+        transform = transforms.Compose(
+            [transforms.ToPILImage(), SequentialCIFAR100_50x2.TRANSFORM])
+        return transform
+
+    @staticmethod
+    def get_backbone(hookme=False):
+        # print('Using resnet rebuffiiiiiii')
+        # return resnet_rebuffi(n_classes=SequentialCIFAR100_50x2.N_CLASSES_PER_TASK * SequentialCIFAR100_50x2.N_TASKS)
+        return resnet32(SequentialCIFAR100_50x2.N_CLASSES_PER_TASK
+                        * SequentialCIFAR100_50x2.N_TASKS)
 
     @staticmethod
     def get_loss():

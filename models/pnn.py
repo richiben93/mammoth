@@ -47,7 +47,7 @@ class Pnn(nn.Module):
         self.x_shape = None
         self.nets = [get_backbone(backbone).to(self.device)]
         self.net = self.nets[-1]
-        self.opt = SGD(self.net.parameters(), lr=self.args.lr)
+        self.opt = SGD(self.net.parameters(), lr=self.args.lr, momentum=self.args.lr_momentum)
 
         self.soft = torch.nn.Softmax(dim=0)
         self.logsoft = torch.nn.LogSoftmax(dim=0)
@@ -75,7 +75,7 @@ class Pnn(nn.Module):
         self.nets[-1].cpu()
         self.nets.append(get_backbone(dataset.get_backbone(), self.nets, self.x_shape).to(self.device))
         self.net = self.nets[-1]
-        self.opt = optim.SGD(self.net.parameters(), lr=self.args.lr)
+        self.opt = optim.SGD(self.net.parameters(), lr=self.args.lr, momentum=self.args.lr_momentum)
 
     def observe(self, inputs, labels, not_aug_inputs):
         if self.x_shape is None:

@@ -52,7 +52,7 @@ class Lwf(ContinualModel):
         self.net.eval()
         if self.current_task > 0:
             # warm-up
-            opt = SGD(self.net.classifier.parameters(), lr=self.args.lr)
+            opt = SGD(self.net.classifier.parameters(), lr=self.args.lr, momentum=self.args.lr_momentum)
             for epoch in range(self.args.n_epochs):
                 for i, data in enumerate(dataset.train_loader):
                     inputs, labels, not_aug_inputs = data

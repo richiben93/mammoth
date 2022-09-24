@@ -153,13 +153,19 @@ class ResNet(nn.Module):
         return feat
 
     def forward_all(self, x: torch.Tensor) -> dict:
+        def return_output_basick_block(input, layer):
+            if len(layer) > 1:
+                for l in layer[:-1]:
+                    input = l(input)
+            output, output_prerelu = layer[-1](input, return_prerelu=True)
+            return output, output_prerelu
         x = self.conv1(x)
         x = self.bn1(x)
         x = nn.ReLU()(x)
-        x, x_1 = self.layer1(x, return_prerelu=True)
-        x, x_2 = self.layer2(x, return_prerelu=True)
-        x, x_3 = self.layer3(x, return_prerelu=True)
-        x, x_4 = self.layer4(x, return_prerelu=True)
+        x, x_1 = return_output_basick_block(x, self.layer1)
+        x, x_2 = return_output_basick_block(x, self.layer2)
+        x, x_3 = return_output_basick_block(x, self.layer3)
+        x, x_4 = return_output_basick_block(x, self.layer4)
         out = avg_pool2d(x, x.shape[2])
         feat = out.view(out.size(0), -1)
         raw_features = avg_pool2d(x_4, x_4.shape[2])
