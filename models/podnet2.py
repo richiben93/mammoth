@@ -29,7 +29,7 @@ def get_parser() -> ArgumentParser:
                         help='L2 regularization applied to the parameters.')
     parser.add_argument('--delta', type=float, default=0.6, )
     parser.add_argument('--k', type=int, default=10, )
-    parser.add_argument('--scheduler', default='cosine')
+    parser.add_argument('--scheduler', default=None, choices=['cosine', 'none'])
     parser.add_argument('--eta', type=float, default=1.)
     parser.add_argument('--scaling', type=float, default=3.)
 
@@ -39,6 +39,8 @@ def get_parser() -> ArgumentParser:
 class PodNetClassifier(nn.Module):
     def __init__(self, in_features, out_features, k, scaling=1, eta=None):
         super(PodNetClassifier, self).__init__()
+        if self.args.scheduler=='none':
+            self.args.scheduler = None
         self.in_features = in_features
         self.k = k
         self.out_features = out_features
