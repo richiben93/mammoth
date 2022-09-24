@@ -39,8 +39,6 @@ def get_parser() -> ArgumentParser:
 class PodNetClassifier(nn.Module):
     def __init__(self, in_features, out_features, k, scaling=1, eta=None):
         super(PodNetClassifier, self).__init__()
-        if self.args.scheduler=='none':
-            self.args.scheduler = None
         self.in_features = in_features
         self.k = k
         self.out_features = out_features
@@ -235,6 +233,8 @@ class PodNet2(ContinualModel):
 
     def __init__(self, backbone, loss, args, transform):
         super(PodNet2, self).__init__(backbone, loss, args, transform)
+        if self.args.scheduler=='none':
+            self.args.scheduler = None
         self.dataset = get_dataset(args)
 
         # Instantiate buffers
