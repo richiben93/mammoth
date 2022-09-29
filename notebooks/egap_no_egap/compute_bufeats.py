@@ -43,7 +43,7 @@ device = get_device()
 from datasets.seq_cifar100 import SequentialCIFAR100_10x10
 print('-- Searching run', args.foldername)
 model, buf_size, reg = find_args(args.foldername)
-if os.path.exists(os.path.join(args.foldername, 'rebuf.pkl')):
+if os.path.exists(os.path.join(args.foldername, 'bufeats.pkl')):
     print("-- ALREADY DONE, ABORTING\n")
     exit()
 
@@ -86,9 +86,6 @@ for id_task in tqdm(range(1, 11)):
     
     
     net = all_data[(model, reg, buf_size)][id_task]['net']
-    all_data[(model, reg, buf_size)][id_task]['projs'] = []
-    all_data[(model, reg, buf_size)][id_task]['preds'] = []
-    all_data[(model, reg, buf_size)][id_task]['labs'] = []
     net.to(device)    
 
     buf = all_data[(model, reg, buf_size)][id_task]['buf']
@@ -102,21 +99,10 @@ for id_task in tqdm(range(1, 11)):
     
     net.to('cpu')
 
-# knn
-print('-- Computing bbs')
-from utils.spectral_analysis import calc_cos_dist, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs, calc_ADL_heat
-wrong_cons = []
 for id_task in tqdm(range(1, 11)):
-    features = all_data[(model, reg, buf_size)][id_task]['bproj']
-    labels = all_data[(model, reg, buf_size)][id_task]['by']
-    
-    knn_laplace = 5 if buf_size == 500 else 4 #int(bbasename(foldername).split('-')[0].split('K')[-1])
-    dists = calc_euclid_dist(features)
-    A, _, _ = calc_ADL_knn(dists, k=knn_laplace, symmetric=True)
-    lab_mask = labels.unsqueeze(0) == labels.unsqueeze(1)
-    wrong_A = A[~lab_mask]
-    wrong_cons.append(wrong_A.sum() / A.sum())
+    del all_data[(model, reg, buf_size)][id_task]['net']
+    del all_data[(model, reg, buf_size)][id_task]['buf']
 
-print('-- Saving to', os.path.join(foldername, 'rebuf.pkl'), '\n')
-with open(os.path.join(foldername, 'rebuf.pkl'), 'wb') as f:
-    pickle.dump((model, buf_size, reg, wrong_cons), f)
+print('-- Saving to', os.path.join(foldername, 'bufeats.pkl'), '\n')
+with open(os.path.join(foldername, 'bufeats.pkl'), 'wb') as f:
+    pickle.dump(all_data, f)
