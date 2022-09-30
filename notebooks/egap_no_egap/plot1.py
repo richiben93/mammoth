@@ -4,6 +4,21 @@ import numpy as np
 import torch
 import pickle
 import os
+import matplotlib
+matplotlib.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}'] #for \text command
+from matplotlib import rc
+plt.rcParams['text.usetex'] = True
+rc('font', family='sans-serif')#, sans-serif='Times')
+plt.rcParams.update({
+    "text.usetex": True,
+#     "font.family": "serif",
+#     "font.sans-serif": ["Times"]})
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Helvetica"]})
+
+plt.rcParams.update({'font.size': 13})
+from matplotlib import cm
+
 
 stds, kms, OO, bbs, bbrs = {}, {}, {}, {}, {}
 for dir in os.listdir('cps'):
@@ -44,7 +59,7 @@ for b in [500]:
             ('*' if m == 'er_ace_egap' else 'o'), label=(m,b,r,f'[{OO[(m,b,r)]}]'), color='C' + str(int(r == 'egap')))
 plt.grid()
 plt.legend(['ER-ACE', 'iCaRL'])
-plt.title('bbs-test set')
+plt.title('Clustering Error')
 
 # %%
 
