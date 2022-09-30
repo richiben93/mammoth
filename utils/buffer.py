@@ -121,7 +121,7 @@ class Buffer:
                     self.task_labels[index] = task_labels[i].to(self.device)
             self.num_seen_examples += 1
 
-    def get_data(self, size: int, transform: transforms=None) -> Tuple:
+    def get_data(self, size: int, transform: transforms=None, return_index=False)-> Tuple:
         """
         Random samples a batch of size items.
         :param size: the number of requested items
@@ -141,7 +141,10 @@ class Buffer:
                 attr = getattr(self, attr_str)
                 ret_tuple += (attr[choice],)
 
-        return ret_tuple
+        if not return_index:
+            return ret_tuple
+        else:
+            return (torch.tensor(choice).to(self.device), ) + ret_tuple
 
     def get_balanced_data(self, size: int, transform: transforms=None, n_classes=-1) -> Tuple:
         """
