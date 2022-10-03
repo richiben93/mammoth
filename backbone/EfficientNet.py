@@ -863,6 +863,13 @@ class EfficientNet(nn.Module):
 
         return x, full_feats
 
+    def forward_all(self, inputs):
+        self.set_return_prerelu(True)
+        x, full_feats = self.extract_features(inputs)
+        prerelu = self._avg_pooling(full_feats[-1]).flatten(start_dim=1)
+        x = self._avg_pooling(x).flatten(start_dim=1)
+        return {'attention': full_feats, 'features': x, 'raw_features': prerelu}
+
     def set_return_prerelu(self, enable=True):
         self.return_prerelu = enable
         for c in self.modules():
