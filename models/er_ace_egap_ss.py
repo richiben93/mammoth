@@ -63,7 +63,7 @@ class ErACEEgapSS(EgapModel):
                 loss += replay_loss * self.args.replay_weight
 
         # ------- STREAM BATCH EGAP -------
-        if self.args.stream_replay_weight > 0:
+        if self.args.stream_replay_weight > 0 and len(inputs) > self.N_CLASSES_PER_TASK:
             stream_egap_loss = self.get_replay_loss(inputs, k=self.N_CLASSES_PER_TASK)
             self.wb_log['stream_egap_loss'] = stream_egap_loss.item()
             loss += stream_egap_loss * self.args.stream_replay_weight
