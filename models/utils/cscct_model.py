@@ -1,11 +1,9 @@
 import torch
 from torch.functional import F
-from torch.utils.data import DataLoader
 
 from utils.buffer import Buffer
 from utils.args import *
 from models.utils.continual_model import ContinualModel
-from utils.spectral_analysis import calc_cos_dist, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs, calc_ADL_heat
 import os
 import pickle
 from copy import deepcopy

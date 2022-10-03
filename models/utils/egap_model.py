@@ -29,7 +29,7 @@ class EgapModel(ContinualModel):
     def __init__(self, backbone, loss, args, transform):
         if args.rep_minibatch < 0:
             args.rep_minibatch = args.buffer_size
-        if args.replay_mode == 'none' or args.replay_weight == 0:
+        if args.replay_mode == 'none' or (args.replay_weight == 0 and args.model != 'er_ace_egap_ss'):
             args.replay_mode = 'none'
             args.replay_weight = 0
         super(EgapModel, self).__init__(backbone, loss, args, transform)
@@ -45,7 +45,7 @@ class EgapModel(ContinualModel):
 
     def get_name_extension(self):
         name = self.args.replay_mode.capitalize()
-        if self.args.replay_weight == 0:
+        if self.args.replay_weight == 0 and self.args.model != 'er_ace_egap_ss':
             return name
         if len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B':
             name += f'NC{self.args.b_nclasses if self.args.b_nclasses is not None else self.N_CLASSES_PER_TASK}'
@@ -57,16 +57,22 @@ class EgapModel(ContinualModel):
             name += f'K{self.args.knn_laplace}'
         return name
 
-    def get_replay_loss(self):
+    def get_replay_loss(self, x=None, y=None, k=None):
         if self.args.replay_mode == 'none':
             return torch.tensor(0., dtype=torch.float, device=self.device)
-        if self.args.rep_minibatch == self.args.buffer_size:
-            buffer_data = self.buffer.get_all_data(self.transform)
-        elif len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B':
-            buffer_data = self.buffer.get_balanced_data(self.args.rep_minibatch, transform=self.transform,
-                                                        n_classes=self.nc)
+        if x is None:
+            if self.args.rep_minibatch == self.args.buffer_size:
+                buffer_data = self.buffer.get_all_data(self.transform)
+            elif len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B':
+                buffer_data = self.buffer.get_balanced_data(self.args.rep_minibatch, transform=self.transform,
+                                                            n_classes=self.nc)
+            else:
+                buffer_data = self.buffer.get_data(self.args.rep_minibatch, self.transform)
         else:
-            buffer_data = self.buffer.get_data(self.args.rep_minibatch, self.transform)
+            assert len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B', "Olny implemented for batch replay mode"
+            buffer_data = (x, y)
+        if k is None:
+            k = self.args.knn_laplace
         inputs, labels = buffer_data[0], buffer_data[1]
         features = self.net.features(inputs)
 
@@ -75,7 +81,7 @@ class EgapModel(ContinualModel):
         if self.args.heat_kernel:
             A, D, L = calc_ADL_heat(dists)
         else:
-            A, D, L = calc_ADL_knn(dists, k=self.args.knn_laplace, symmetric=True)
+            A, D, L = calc_ADL_knn(dists, k=k, symmetric=True)
 
         L = torch.eye(A.shape[0], device=A.device) - normalize_A(A, D)
 
