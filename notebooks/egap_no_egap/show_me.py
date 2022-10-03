@@ -6,12 +6,14 @@ import pickle
 import os
 
 stds, kms, OO, bbs, bbrs = {}, {}, {}, {}, {}
+mans, mas =  {}, {}
 for dir in os.listdir('cps'):
     if os.path.isdir(os.path.join('cps', dir)) and 'responses.pkl' in os.listdir(os.path.join('cps', dir)):
         try:
             model, buffer, reg, km, std = pickle.load(open(os.path.join('cps', dir, 'responses.pkl'), 'rb'))
             model, buffer, reg, bb  = pickle.load(open(os.path.join('cps', dir, 'rebuf.pkl'), 'rb'))
-            model, buffer, reg, bbr  = pickle.load(open(os.path.join('cps', dir, 'resubtest.pkl'), 'rb'))
+            # model, buffer, reg, bbr  = pickle.load(open(os.path.join('cps', dir, 'resubtest.pkl'), 'rb'))
+            model, buffer, reg, ma, man  = pickle.load(open(os.path.join('cps', dir, 'bufbagu.pkl'), 'rb'))
         except:
             print(f'Error in {dir}')
         if (model, buffer, reg) not in stds:
@@ -19,10 +21,15 @@ for dir in os.listdir('cps'):
             kms[(model, buffer, reg)] = []
             bbs[(model, buffer, reg)] = []
             bbrs[(model, buffer, reg)] = []
+            mas[(model, buffer, reg)] = []
+            mans[(model, buffer, reg)] = []
         stds[(model, buffer, reg)].append(std)
         kms[(model, buffer, reg)].append(km)
         bbs[(model, buffer, reg)].append(bb)
-        bbrs[(model, buffer, reg)].append(bbr)
+        # bbrs[(model, buffer, reg)].append(bbr)
+        mas[(model, buffer, reg)].append(ma)
+        mans[(model, buffer, reg)].append(man)
+
 
 
 # plt.figure(figsize=(10, 10))
@@ -41,7 +48,11 @@ for k in stds:
     kms[k] = np.stack(kms[k]).mean(0)
     # bbvar[k] = np.meadinp.stack(bbs[k]).std(0)
     rbbs[k] = np.median(np.stack(bbs[k]), axis=0)
-    bbrs[k] = np.median(np.stack(bbrs[k]), axis=0)
+    # bbrs[k] = np.median(np.stack(bbrs[k]), axis=0)
+    print(k, len(mas[k]))
+    mas[k] = np.median(np.stack(mas[k]), axis=0)
+    mans[k] = np.median(np.stack(mans[k]), axis=0)
+
 
 
 # buffy = 2000#2000
@@ -79,23 +90,22 @@ plt.figure(figsize=(7, 7))
 for b in [500]:
     for m in mods:
         for r in ['none', 'egap']:
-            plt.plot(range(9), np.array(rbbs[(m, b, r)][1:]), 
-            '-' +
-            ('*' if m == 'er_ace_egap' else 'o'), label=(m,b,r,f'[{OO[(m,b,r)]}]'), color='C' + str(int(r == 'egap')))
+            plt.plot(range(9), np.array(mas[(m, b, r)][1:]), 
+            label=(m,b,r,f'[{OO[(m,b,r)]}]'), marker='o')
 plt.grid()
 plt.legend()
-plt.title('bbs-buffer')
+plt.title('mean_a')
 
-plt.figure(figsize=(7, 7))
-for b in [500]:
-    for m in mods:
-        for r in ['none', 'egap']:
-            plt.plot(range(9), np.array(bbrs[(m, b, r)][1:]), 
-            '-' +
-            ('*' if m == 'er_ace_egap' else 'o'), label=(m,b,r,f'[{OO[(m,b,r)]}]'), color='C' + str(int(r == 'egap')))
-plt.grid()
-plt.legend()
-plt.title('bbs-test set')
+# plt.figure(figsize=(7, 7))
+# for b in [500]:
+#     for m in mods:
+#         for r in ['none', 'egap']:
+#             plt.plot(range(9), np.array(mans[(m, b, r)][1:]), 
+#             '-' +
+#             ('*' if m == 'er_ace_egap' else 'o'), label=(m,b,r,f'[{OO[(m,b,r)]}]'), color='C' + str(int(r == 'egap')))
+# plt.grid()
+# plt.legend()
+# plt.title('mean_a norm')
 
 # for b in [500, 2000]:
 #     for m in [mod]:
