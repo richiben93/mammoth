@@ -15,7 +15,7 @@ def bbasename(path):
 
 def find_args(foldername):
     api = wandb.Api(timeout=180)
-    entity, project = 'regaz', 'rodo-istats'
+    entity, project = 'regaz', 'rodo-istatsTEST'
     for runna in api.runs(f'{entity}/{project}'):
         if runna.name == bbasename(foldername).split('_')[0]:
             print('-- Run found!')
