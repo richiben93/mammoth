@@ -49,8 +49,8 @@ for k in stds:
     # bbvar[k] = np.meadinp.stack(bbs[k]).std(0)
     rbbs[k] = np.median(np.stack(bbs[k]), axis=0)
     # bbrs[k] = np.median(np.stack(bbrs[k]), axis=0)
-    print(k, len(mas[k]))
-    mas[k] = np.median(np.stack(mas[k]), axis=0)
+    # print(k, len(mas[k]))
+    # mas[k] = np.median(np.stack(mas[k]), axis=0)
     mans[k] = np.median(np.stack(mans[k]), axis=0)
 
 
@@ -75,7 +75,7 @@ for k in stds:
 # plt.legend()
 # plt.title('STD')
 
-mods = ['er_ace_egap', 'icarl_egap']
+mods = ['xder_rpc_egap']#'podnet_egap', 'er_ace_egap', 
 
 
 # plt.figure(figsize=(10, 10))
@@ -90,8 +90,14 @@ plt.figure(figsize=(7, 7))
 for b in [500]:
     for m in mods:
         for r in ['none', 'egap']:
-            plt.plot(range(9), np.array(mas[(m, b, r)][1:]), 
-            label=(m,b,r,f'[{OO[(m,b,r)]}]'), marker='o')
+            # if r == 'none': continue
+            # for amas in mas[(m, b, r)]:
+            #     plt.plot(range(9), np.array(amas[1:]), 
+            #     label=(m,b,r,f'[{OO[(m,b,r)]}]'), marker='o')
+            plt.plot(range(9), np.stack(mas[(m,b,r)]).mean(0)[1:], 
+                label='mean', marker='o')
+            plt.plot(range(9), np.median(np.stack(mas[(m,b,r)]), 0)[1:], 
+                label='median', marker='o')
 plt.grid()
 plt.legend()
 plt.title('mean_a')

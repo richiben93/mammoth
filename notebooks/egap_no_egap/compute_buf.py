@@ -15,7 +15,7 @@ def bbasename(path):
 
 def find_args(foldername):
     api = wandb.Api(timeout=180)
-    entity, project = 'regaz', 'rodo-istats'
+    entity, project = 'regaz', 'rodo-istatsTEMP'
     for runna in api.runs(f'{entity}/{project}'):
         if runna.name == bbasename(foldername).split('_')[0]:
             print('-- Run found!')
@@ -51,7 +51,7 @@ print('-- Loading Datasets')
 foldername = args.foldername
 args = Namespace(
             batch_size=64,
-            dataset='seq-cifar100_10x10',
+            dataset='seq-cifar100-10x10',
             validation=False,
 )
 dataset = SequentialCIFAR100_10x10(args)
@@ -72,6 +72,24 @@ if path[-1] != '/':
 print('-- Loading models')
 for id_task in range(1, 11):
     net = resnet18(100)
+    if model == 'podnet_egap':
+        from models.podnet_egap import PodNetEgap
+        args.rep_minibatch = 64
+        args.replay_mode = 'none'
+        args.lr = 0.1
+        args.model = model
+        args.lr_momentum = 0
+        args.wandb = False
+        args.buffer_size= buf_size
+        args.scheduler= None
+        args.k=10
+        args.scaling=3
+        args.eta =1
+        args.delta=0.6
+        args.wb_prj, args.wb_entity = 'regaz', 'rodo-istatsTEMP'
+        t_model = PodNetEgap(net, lambda x: x, args, None)
+        net = t_model.net
+        
     sd = torch.load(path + f'task_{id_task}.pt', map_location='cpu')
     net.load_state_dict(sd)
     net.eval()

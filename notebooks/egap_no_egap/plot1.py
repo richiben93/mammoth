@@ -5,7 +5,7 @@ import torch
 import pickle
 import os
 import matplotlib
-matplotlib.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}'] #for \text command
+matplotlib.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}' + '\n' + r'\usepackage{mathpazo}' #for \text command
 from matplotlib import rc
 plt.rcParams['text.usetex'] = True
 rc('font', family='sans-serif')#, sans-serif='Times')
@@ -18,7 +18,9 @@ plt.rcParams.update({
 
 plt.rcParams.update({'font.size': 13})
 from matplotlib import cm
-
+palette = '00340a-ace894-a8ba9a-4d82b7-6b6570-4a314d-1a090d-57120d-c6572c-f7934c'
+from matplotlib.colors import ListedColormap
+spookmap = ListedColormap(['#'+x for x in palette.split('-')])
 
 stds, kms, OO, bbs, bbrs = {}, {}, {}, {}, {}
 for dir in os.listdir('cps'):
@@ -48,9 +50,9 @@ for k in stds:
     rbbs[k] = np.median(np.stack(bbs[k]), axis=0)
     
 
-mods = ['icarl_egap', 'er_ace_egap']
+mods = ['podnet_egap', 'icarl_egap', 'er_ace_egap']
 # plt.figure(figsize=(5 * 1.5 * .9, 2 * 1.3 * .9)) # long
-plt.figure(figsize=(5 * 1.5 * .9 * 2 * .25, 5 * 1.5 * .9 * .6)) # tall
+plt.figure(figsize=(5 * 1.5 * .9 * 2 * .25, 5 * 1.5 * .9 * .55)) # tall
 
 # ----------------------------- MAGIC PLOTMAGIC -----------------------------
 myax = plt.gca()
@@ -79,12 +81,29 @@ myax.tick_params(
 # axb.tick_params(axis='y', colors=pp[-3], labelcolor=pp[-3])
 # --------------------------------------------------------------------------
 
+markerdict = {
+    'none': 'o',
+    'egap': '^',
+}
+
+msdict = {
+    'none': 7,
+    'egap': 9,
+}
+
+cdict = {
+    'icarl_egap': spookmap.colors[1],
+    'er_ace_egap': spookmap.colors[3],
+    'podnet_egap': spookmap.colors[9]
+}
+
 for b in [500]:
     for m in mods:
         for r in ['none', 'egap']:
             plt.plot(range(9), np.array(rbbs[(m, b, r)][1:]), 
             ('-' if r == 'none' else '--') +
-            ('o' if m == 'er_ace_egap' else '^'), label=(m,b,r,f'[{OO[(m,b,r)]}]'), color='C' + str(int(r == 'egap')))
+            markerdict[r], label=(m,b,r,f'[{OO[(m,b,r)]}]'), color=cdict[m],
+            mew=1, mec='w', ms=msdict[r])
 
 myax.xaxis.grid(True, which='major', linestyle=':', linewidth=1)
 myax.yaxis.grid(True, which='major', linestyle='-', linewidth=1)
@@ -92,10 +111,12 @@ myax.set_axisbelow(True)
 
 myax.set_xticks(range(9))
 myax.set_xticklabels([f'$\\tau_{{{i+2}}}$' for i in range(9)]) # check convenzione ema
+
+plt.legend()
 handles, _ = myax.get_legend_handles_labels()
 handles = np.array(handles)
-plt.legend(handles[[0,2,1,3]], ['ER-ACE', 'iCaRL', ' + EP',  ' + EP'], edgecolor='k', framealpha=1, fancybox=False, loc='upper left',
-    handletextpad=0.3, handlelength=0.8, ncol=2, columnspacing=0.4, labelspacing=0.15)#, bbox_to_anchor=(-0.015,1.03))
+plt.legend(handles[[0,2,4,1,3,5]], ['PODNet', 'iCaRL', 'ER-ACE', ' + CaSpeR', ' + CaSpeR',  ' + CaSpeR'], edgecolor='k', framealpha=1, fancybox=False, loc='upper center',
+    handletextpad=0.3, handlelength=1.7, ncol=2, columnspacing=0.4, labelspacing=0.15)#, bbox_to_anchor=(-0.015,1.03))
 
 ## OLD WAY
 # myax.set_ylabel('Clustering Error')
@@ -103,14 +124,17 @@ plt.legend(handles[[0,2,1,3]], ['ER-ACE', 'iCaRL', ' + EP',  ' + EP'], edgecolor
 # myax.set_yticklabels(['0', '.1', '.2', '.3', '.4', '.5', '.6', '.7', '.8', '.9', '1'])
 # myax.set_ylim(0, 1)
 
-myax.set_ylabel('Label-Signal Variation')
-myax.set_ylim(0, 3400)
+myax.set_ylabel('Label-Signal Variation ($\\sigma$)')
+myax.set_ylim(0, 4850)
+myax.set_yticks(np.arange(10) * 500)
 myax.set_xlim(-0.5, 8.5)
-
 myax.set_xlabel('Task')
 plt.savefig('plot1.pdf', bbox_inches='tight')
 
 # %%
+
+
+
 egap_exp = 'EraceEgapb2NC16K4-exSX7'
 none_exp = 'EraceNone-37CZ2'
 if not os.path.exists('scatter_meta.pkl'):
@@ -177,19 +201,33 @@ def prep_ax(anax):
         top=False,         # ticks along the top edge are off
         labelbottom=True) 
 
+def rebase_labels(array):
+    eyey = torch.eye(array.max()+1)
+    bige = eyey[array]
+    filtered = bige[:, bige.sum(0) > 0]
+    return filtered.argmax(1)
+
 data = sm[none_exp]
 for myax, steppe in zip(ax[0], [2,3,4,5]):
+    print(np.unique(data[steppe][1]))
+    data[steppe] = (data[steppe][0], rebase_labels(data[steppe][1]))
+    print(np.unique(data[steppe][1]))
+
     prep_ax(myax)
-    myax.scatter(*data[steppe][0].T, c=data[steppe][1], s=5, cmap='tab10')
+    myax.scatter(*data[steppe][0].T, c=data[steppe][1], s=5, cmap=spookmap)
     # myax.set_title(f'Task {steppe}')
     myax.set_xticks([])
     myax.set_yticks([])
 
 data = sm[egap_exp]
 for myax, steppe in zip(ax[1], [2,3,4,5]):
+    data[steppe] = (data[steppe][0], rebase_labels(data[steppe][1]))
+
     prep_ax(myax)
-    myax.scatter(*data[steppe][0].T, c=data[steppe][1], s=5, cmap='tab10')
-    myax.set_title(f'Task {steppe}')
+    myax.scatter(*data[steppe][0].T, c=data[steppe][1], s=5, cmap=spookmap)
+    myax.set_title(f'$\\tau_{{{steppe}}}$')
+    if steppe == 2:
+        myax.annotate('Task:', (0,0), (0.12,1.09), textcoords='axes fraction', va='center', ha='left', fontsize=15)
     myax.set_xticks([])
     myax.set_yticks([])
     
