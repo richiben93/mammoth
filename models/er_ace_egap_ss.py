@@ -46,8 +46,10 @@ class ErACEEgapSS(EgapModel):
             mask[:, self.seen_so_far.max():] = 1
         if self.task > 0:
             logits = logits.masked_fill(mask == 0, torch.finfo(logits.dtype).min)
-
-        class_loss = self.loss(logits[sup_mask], labels[sup_mask])
+        if sup_mask.sum():
+            class_loss = self.loss(logits[sup_mask], labels[sup_mask])
+        else:
+            class_loss = torch.tensor(0.).to(self.device)
         self.wb_log['class_loss'] = class_loss.item()
         loss = class_loss
         if self.task > 0 and self.args.buffer_size > 0:
