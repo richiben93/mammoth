@@ -74,7 +74,8 @@ class ErACEEgapSS(EgapModel):
         if self.args.buffer_size > 0 and sup_mask.sum() > 0:
             self.buffer.add_data(examples=not_aug_inputs[sup_mask], labels=labels[sup_mask])
 
-        loss.backward()
+        if loss.requires_grad:
+            loss.backward()
         # clip gradients
         if self.args.grad_clip > 0:
             torch.nn.utils.clip_grad_norm_(self.net.parameters(), self.args.grad_clip)
