@@ -42,7 +42,7 @@ class ErACEEgapSS(EgapModel):
         logits = self.net(inputs)
         mask = torch.zeros_like(logits)
         mask[:, present] = 1
-        if self.seen_so_far.max() < (self.N_CLASSES - 1):
+        if len(self.seen_so_far) and self.seen_so_far.max() < (self.N_CLASSES - 1):
             mask[:, self.seen_so_far.max():] = 1
         if self.task > 0:
             logits = logits.masked_fill(mask == 0, torch.finfo(logits.dtype).min)
