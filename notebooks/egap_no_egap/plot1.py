@@ -233,6 +233,6 @@ for myax, steppe in zip(ax[1], [2,3,4,5]):
     
 
 ax[0,0].set_ylabel('ER-ACE')
-ax[1,0].set_ylabel('ER-ACE + EP')
+ax[1,0].set_ylabel('ER-ACE + CaSpeR')
 plt.savefig('plot2.pdf', bbox_inches='tight')
 # %%
