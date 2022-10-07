@@ -20,6 +20,7 @@ from datasets import NAMES as DATASET_NAMES
 from models import get_all_models
 from argparse import ArgumentParser
 from utils.args import add_management_args
+import setproctitle
 from datasets import ContinualDataset
 from utils.continual_training import train as ctrain
 from datasets import get_dataset
@@ -121,10 +122,10 @@ def main(args=None):
         backbone = dataset.get_backbone()
     loss = dataset.get_loss()
     model = get_model(args, backbone, loss, dataset.get_transform())
-    if socket.gethostname().startswith('go') or socket.gethostname() == 'jojo' or socket.gethostname() == 'yobama' or socket.gethostname() == 'dragon':
-        import setproctitle
-        setproctitle.setproctitle(
-            '{}_{}_{}'.format(args.model, args.buffer_size if 'buffer_size' in args else 0, args.dataset))
+    
+    
+    setproctitle.setproctitle(
+        '{}_{}_{}'.format(args.model, args.buffer_size if 'buffer_size' in args else 0, args.dataset))
 
     if args.distributed:
         model.net = make_dp(model.net)
