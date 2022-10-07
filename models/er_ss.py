@@ -1,5 +1,6 @@
 import torch
 from models.utils.continual_model import ContinualModel
+from utils.buffer import Buffer
 from utils.args import *
 
 
@@ -22,9 +23,10 @@ class ErSS(ContinualModel):
 
     def __init__(self, backbone, loss, args, transform):
         super(ErSS, self).__init__(backbone, loss, args, transform)
-        
+        self.buffer = Buffer(self.args.buffer_size, self.device)
+
     def get_name(self):
-        return 'ErSS' + self.get_name_extension()
+        return 'ErSS'
 
     def observe(self, inputs, labels, not_aug_inputs):
         self.opt.zero_grad()
@@ -37,14 +39,14 @@ class ErSS(ContinualModel):
             class_loss = torch.tensor(0.).to(self.device)
         self.wb_log['class_loss'] = class_loss.item()
         loss = class_loss
-        if self.task > 0 and self.args.buffer_size > 0:
+        if not self.buffer.is_empty():
             # sample from buffer
             buf_inputs, buf_labels = self.buffer.get_data(self.args.minibatch_size, transform=self.transform)
             er_loss = self.loss(self.net(buf_inputs), buf_labels)
             self.wb_log['er_loss'] = er_loss.item()
             loss += er_loss
 
-        if self.args.buffer_size > 0 and sup_mask.sum() > 0:
+        if sup_mask.sum() > 0:
             self.buffer.add_data(examples=not_aug_inputs[sup_mask], labels=labels[sup_mask])
 
         if loss.requires_grad:
