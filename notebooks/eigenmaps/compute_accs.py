@@ -15,18 +15,18 @@ def bbasename(path):
 
 def find_args(foldername):
     api = wandb.Api(timeout=180)
-    try:
-        entity, project = 'regaz', 'rodo-istats'
-        for runna in api.runs(f'{entity}/{project}'):
-            if runna.name == bbasename(foldername).split('_')[0]:
-                print('-- Run found!')
-                return runna.config['model'], runna.config['buffer_size'], 'egap' if 'egap' in runna.config['name'].lower() else 'none'
-    except:
-        entity, project = 'regaz', 'rodo-istatsTEMP'
-        for runna in api.runs(f'{entity}/{project}'):
-            if runna.name == bbasename(foldername).split('_')[0]:
-                print('-- Run found!')
-                return runna.config['model'], runna.config['buffer_size'], 'egap' if 'egap' in runna.config['name'].lower() else 'none'
+    
+    entity, project = 'regaz', 'rodo-istats'
+    for runna in api.runs(f'{entity}/{project}'):
+        if runna.name == bbasename(foldername).split('_')[0]:
+            print('-- Run found!')
+            return runna.config['model'], runna.config['buffer_size'], 'egap' if 'egap' in runna.config['name'].lower() else 'none'
+
+    entity, project = 'regaz', 'rodo-istatsTEMP'
+    for runna in api.runs(f'{entity}/{project}'):
+        if runna.name == bbasename(foldername).split('_')[0]:
+            print('-- Run found!')
+            return runna.config['model'], runna.config['buffer_size'], 'egap' if 'egap' in runna.config['name'].lower() else 'none'
     raise ValueError(f'Could not find run for {foldername}')
 
 args = ArgumentParser()

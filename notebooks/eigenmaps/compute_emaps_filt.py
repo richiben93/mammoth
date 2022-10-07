@@ -121,7 +121,7 @@ for id_task in tqdm(range(1, 11)):
 
     for j, dl in enumerate(dataset.test_loaders[:id_task]):
         corr, corrknn, tot = 0, 0, 0
-        projs, labs = [], []
+        projs, labs, preds = [], [], []
         for x, y in dl:
             x = x.to(device)
             y = y
@@ -133,15 +133,17 @@ for id_task in tqdm(range(1, 11)):
             tot += len(y)
             projs.append(proj)
             labs.append(y)
+            preds.append(pred.argmax(dim=1) == y)
             
         all_data[(model, reg, buf_size)][id_task][f'projs_{j}'] = torch.cat(projs)
         all_data[(model, reg, buf_size)][id_task][f'labs_{j}'] = torch.cat(labs)
+        all_data[(model, reg, buf_size)][id_task][f'preds_{j}'] = torch.cat(preds)
+
         
     net.to('cpu')
 
 print('-- Computing FMAPS')
 from utils.spectral_analysis import normalize_A, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs, find_eigs, calc_ADL_heat, calc_cos_dist
-# TODO verifica se buffer troppo largo
 
 knn_laplace = 20
 ev_pairs = 100
@@ -172,10 +174,13 @@ fmaps = []
 for (id_task, prev_id) in [(1,5), (5, 10)]:
     features_prev = torch.cat([all_data[(model, reg, buf_size)][id_task][f'projs_{k}'] for k in range(id_task)])
     features_next = torch.cat([all_data[(model, reg, buf_size)][prev_id][f'projs_{k}'] for k in range(id_task)])
-    filter = torch.randperm(len(features_prev))[:subsamp * (id_task) // 10]
+    preds_prev = torch.cat([all_data[(model, reg, buf_size)][id_task][f'preds_{k}'] for k in range(id_task)])
+    preds_next = torch.cat([all_data[(model, reg, buf_size)][prev_id][f'preds_{k}'] for k in range(id_task)])
+    filter1 = preds_prev & preds_next
+    filter = torch.randperm(filter1.sum())[:subsamp * (id_task) // 10]
     print(filter.shape)
-    features_prev = features_prev[filter]
-    features_next = features_next[filter]
+    features_prev = features_prev[filter1][filter]
+    features_next = features_next[filter1][filter]
 
     dists_prev = calc_euclid_dist(features_prev)
     dists_next = calc_euclid_dist(features_next)
@@ -191,8 +196,8 @@ for (id_task, prev_id) in [(1,5), (5, 10)]:
     fmap = evects_next.T @ evects_prev
     fmaps.append(fmap)
     
-print('-- Saving to file', os.path.join(foldername, 'fmapsFL.pkl'))
-with open(os.path.join(foldername, 'fmapsFL.pkl'), 'wb') as f:
+print('-- Saving to file', os.path.join(foldername, 'fmapsFILT.pkl'))
+with open(os.path.join(foldername, 'fmapsFILT.pkl'), 'wb') as f:
     pickle.dump(fmaps, f)
 
 exit()
