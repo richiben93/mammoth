@@ -11,10 +11,7 @@ def get_parser() -> ArgumentParser:
     add_rehearsal_args(parser)      # --minibatch_size, --buffer_size
     parser.add_argument('--grad_clip', default=0, type=float, help='Clip the gradient.')
     parser.add_argument('--erace_weight', type=float, default=1., help='Weight of erace.')
-
     parser.add_argument('--perc_labels', type=float, default=0.25, help='Percentage of labels to use for training.')
-    # --replay_mode, --replay_weight, --rep_minibatch, 
-    # --heat_kernel, --cos_dist, --knn_laplace
     EgapModel.add_replay_args(parser)
 
     parser.add_argument('--stream_replay_weight', type=float, required=True, help='Weight of replay.')
@@ -29,6 +26,7 @@ class ErACEEgapPsiSS(EgapModel):
     def __init__(self, backbone, loss, args, transform):
         super(ErACEEgapPsiSS, self).__init__(backbone, loss, args, transform)
         self.seen_so_far = torch.tensor([], dtype=torch.long, device=self.device)
+        self.cpt = self.N_CLASSES_PER_TASK
 
     def get_name(self):
         return 'EraceSS' + self.get_name_extension()
