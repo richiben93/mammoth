@@ -121,7 +121,7 @@ class Buffer:
                     self.task_labels[index] = task_labels[i].to(self.device)
             self.num_seen_examples += 1
 
-    def get_data(self, size: int, transform: transforms=None, return_index=False)-> Tuple:
+    def get_data(self, size: int, transform: transforms=None, return_index=False, mask_task=None, mask_task_cpt=None)-> Tuple:
         """
         Random samples a batch of size items.
         :param size: the number of requested items
@@ -130,6 +130,11 @@ class Buffer:
         """
         if size > min(self.num_seen_examples, self.examples.shape[0]):
             size = min(self.num_seen_examples, self.examples.shape[0])
+
+        if mask_task is not None:
+            masked_examples = self.examples[self.labels // mask_task_cpt != mask_task]
+        else:
+            masked_examples = self.examples
 
         choice = np.random.choice(min(self.num_seen_examples, self.examples.shape[0]),
                                   size=size, replace=False)
