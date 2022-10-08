@@ -54,7 +54,7 @@ class ErACEEgapPsiSS(EgapModel):
     def observe(self, inputs, labels, not_aug_inputs):
         self.opt.zero_grad()
 
-        inputs, labels, not_aug_inputs = self.pseudo_label(inputs, labels, not_aug_inputs, conf=self.args.conf)
+        inputs, labels, not_aug_inputs = self.pseudo_label(inputs, labels, not_aug_inputs)
         sup_mask = labels < 1000
 
         present = labels[sup_mask].unique()
