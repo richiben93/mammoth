@@ -6,17 +6,21 @@ cursed_idxes = cursed = ['DerppEgapb2NC10K10-E8mrT', 'DerppEgapb2NC10K10-70FsB',
     'ICarlNone-Mi7ND', 'ICarlNone-MYc7I', 'ICarlNone-DzvPO', 'ICarlNone-xJFGh', 'ICarlEgapb2NC10K10-v6EZ0',
     'PodnetEgapb2NC10K10-PZMe3', 'PodnetNone-Vw1GI']
 # %%
+
 good_hmaps = []
 # %%
 # ER 2000
 import pickle
 import seaborn as sns
 import matplotlib.pyplot as plt
-cpas = ['EraceEgapb2NC10CosK5-e5VM0', 'EraceEgapb2NC10CosK5-VyQ5G',
-       'EraceEgapb2NC10CosK5-AsouZ']
-cpbs = ['EraceNone-YdLI1', 'EraceNone-NHxIp' , 'EraceNone-P4JAv',
-       'EraceNone-2FkDp', 'EraceNone-XSFZg', 'EraceNone-ZjRTT',
-       'EraceNone-Qzo4h']
+cpas = ['EraceEgapb2NC10K6-9zwoG',
+'EraceEgapb2NC10K6-wjhoC']#'EraceEgapb2NC10CosK5-e5VM0', 'EraceEgapb2NC10CosK5-VyQ5G',
+    #    'EraceEgapb2NC10CosK5-AsouZ']
+cpbs = ['EraceNone-OBTUH',
+'EraceNone-WtdgD',
+]#'EraceNone-YdLI1', 'EraceNone-NHxIp' , 'EraceNone-P4JAv',
+    #    'EraceNone-2FkDp', 'EraceNone-XSFZg', 'EraceNone-ZjRTT',
+    #    'EraceNone-Qzo4h']
 cpas = [x for x in cpas if x not in cursed_idxes]
 cpbs = [x for x in cpbs if x not in cursed_idxes]
 
@@ -46,12 +50,13 @@ for j, cp in enumerate(cpas + cpbs):
 plt.savefig('pdf.pdf', bbox_inches='tight')
 
 # %%
+
 # DER 2000
 import pickle
 import seaborn as sns
 import matplotlib.pyplot as plt
 cpas = ['DerppEgapb2NC10K10-Mn2MC', 'DerppEgapb2NC10K10-70FsB']
-cpbs = ['DerppNone-Th2IC', 'DerppNone-HPx0g', 'DerppNone-ZjsSx']
+cpbs = ['DerppNone-jBBdP']#,'DerppNone-Th2IC', 'DerppNone-HPx0g', 'DerppNone-ZjsSx']
 cpas = [x for x in cpas if x not in cursed_idxes]
 cpbs = [x for x in cpbs if x not in cursed_idxes]
 
@@ -84,8 +89,9 @@ for j, cp in enumerate(cpas + cpbs):
 import pickle
 import seaborn as sns
 import matplotlib.pyplot as plt
-cpas = ['ICarlEgapb2NC10K10-v6EZ0', 'ICarlEgapb2NC10K10-PMXxZ']
-cpbs = ['ICarlNone-cpie7', 'ICarlNone-DzvPO', 'ICarlNone-xJFGh']
+cpas = ['ICarlEgapb2NC10K10-yG4S0',
+'ICarlEgapb2NC10K10-a95uQ']#,'ICarlEgapb2NC10K10-v6EZ0', 'ICarlEgapb2NC10K10-PMXxZ']
+cpbs = ['ICarlNone-YAiFM',]#'ICarlNone-cpie7', 'ICarlNone-DzvPO', 'ICarlNone-xJFGh']
 cpas = [x for x in cpas if x not in cursed_idxes]
 cpbs = [x for x in cpbs if x not in cursed_idxes]
 
@@ -183,7 +189,7 @@ for j, cp in enumerate(cpas + cpbs):
 import pickle
 import seaborn as sns
 import matplotlib.pyplot as plt
-cpas = ['PodnetEgapb2NC10K10-lMKWg','PodnetEgapb2NC10K10-PZMe3']
+cpas = ['PodnetEgapb2NC10K10-QgXDw',]#'PodnetEgapb2NC10K10-lMKWg','PodnetEgapb2NC10K10-PZMe3']
 cpbs = ['PodnetNone-qjxuI','PodnetNone-Vw1GI'] 
 cpas = [x for x in cpas if x not in cursed_idxes]
 cpbs = [x for x in cpbs if x not in cursed_idxes]
