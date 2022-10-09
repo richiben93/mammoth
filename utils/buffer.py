@@ -132,7 +132,7 @@ class Buffer:
             size = min(self.num_seen_examples, self.examples.shape[0])
 
         if mask_task is not None:
-            masked_examples = self.examples[self.labels // mask_task_cpt != mask_task]
+            masked_examples = self.examples[:self.num_seen_examples][self.labels[:self.num_seen_examples] // mask_task_cpt != mask_task]
         else:
             masked_examples = self.examples
 
@@ -144,6 +144,8 @@ class Buffer:
         for attr_str in self.attributes[1:]:
             if hasattr(self, attr_str):
                 attr = getattr(self, attr_str)
+                if mask_task is not None:
+                    attr = attr[:self.num_seen_examples][self.labels[:self.num_seen_examples] // mask_task_cpt != mask_task]
                 ret_tuple += (attr[choice],)
 
         if not return_index:
@@ -224,7 +226,7 @@ class Buffer:
         """
         if transform is None: transform = lambda x: x
         ret_tuple = (torch.stack([transform(ee.cpu())
-                            for ee in self.examples]).to(self.device),)
+                            for ee in self.examples[:self.num_seen_examples]]).to(self.device),)
         for attr_str in self.attributes[1:]:
             if hasattr(self, attr_str):
                 attr = getattr(self, attr_str)

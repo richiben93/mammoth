@@ -86,7 +86,7 @@ def get_parser() -> ArgumentParser:
     parser.add_argument('--sharp_temp', default=0.5,
                         type=float, help='Temperature for sharpening.')
     parser.add_argument('--mixup_alpha', default=0.75, type=float)
-    
+    parser.add_argument('--use_vbs', type=int, default=0)
     return parser
 
 
@@ -182,15 +182,16 @@ class CCICEgapSS(EgapModel):
             self.mng_epoch()
             return 1.
 
-        # VIRTUAL BATCHES
-        self.sup_virtual_batch.add_data(sup_not_aug_inputs, sup_labels)
-        sup_inputs, sup_labels = self.sup_virtual_batch.get_data(
-            self.args.batch_size, transform=self.transform)
-        if self.task > 0:
-            self.unsup_virtual_batch.add_data(
-                unsup_not_aug_inputs, unsup_labels)
-            unsup_inputs = self.unsup_virtual_batch.get_data(
-                self.args.batch_size, transform=self.transform)[0]
+        if self.args.use_vbs:
+            # VIRTUAL BATCHES
+            self.sup_virtual_batch.add_data(sup_not_aug_inputs, sup_labels)
+            sup_inputs, sup_labels = self.sup_virtual_batch.get_data(
+                self.args.batch_size, transform=self.transform)
+            if self.task > 0:
+                self.unsup_virtual_batch.add_data(
+                    unsup_not_aug_inputs, unsup_labels)
+                unsup_inputs = self.unsup_virtual_batch.get_data(
+                    self.args.batch_size, transform=self.transform)[0]
 
         # BUFFER RETRIEVAL
         if not self.buffer.is_empty():
