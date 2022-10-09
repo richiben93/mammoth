@@ -61,10 +61,9 @@ class SequentialCIFAR100_10x10SS(ContinualDataset):
         assert 'perc_labels' in self.args, "use with SS models only"
         lt = len(train.dataset.targets)
         for c in np.unique(train.dataset.targets):
-            subcl = np.array(train.dataset.targets) == c
-            lc = np.sum(subcl)
-            ss_mask = np.random.permutation(lc)[int(lc * self.args.perc_labels):]
-            train.dataset.targets[subcl][ss_mask] += 1000
+            subcl = np.where(np.array(train.dataset.targets) == c)[0]
+            ss_mask = np.random.permutation(subcl)[int(len(subcl) * self.args.perc_labels):]
+            train.dataset.targets[ss_mask] += 1000
         return train, test
 
     @staticmethod
