@@ -157,6 +157,14 @@ class CCICEgapSS(EgapModel):
             self.args.k, largest=False)[1]]].sum(1)
         return topkappas - dist * 10e-6
 
+    def mng_epoch(self):
+        # --------- EPOCH MGMT ----------
+        self.seen_batches += 1
+        if self.seen_batches == self.epoch_batches:
+            self.epoch += 1
+            self.seen_batches = 0
+        # -------------------------------
+
     def observe(self, inputs, labels, not_aug_inputs):
         self.opt.zero_grad()
         real_batch_size = inputs.shape[0]
@@ -171,6 +179,7 @@ class CCICEgapSS(EgapModel):
 
         # short-circuit if no labeled data
         if len(sup_inputs) == 0 and self.buffer.is_empty():
+            self.mng_epoch()
             return 1.
 
         # VIRTUAL BATCHES
@@ -248,25 +257,25 @@ class CCICEgapSS(EgapModel):
             effective_mbs = -100
 
         # ------------------ CIC LOSS ---------------------
+        if self.epoch < self.args.n_epochs / 10 * 9:
+            loss_X = 0
+            if real_mask.sum() > 0:
+                loss_X += self.loss(sup_mix_outputs[:-effective_mbs],
+                                    sup_labels[:-effective_mbs])
+            if not self.buffer.is_empty():
+                assert effective_mbs > 0
+                loss_X += self.args.memory_penalty * \
+                    self.loss(sup_mix_outputs[-effective_mbs:],
+                            sup_labels[-effective_mbs:])
 
-        loss_X = 0
-        if real_mask.sum() > 0:
-            loss_X += self.loss(sup_mix_outputs[:-effective_mbs],
-                                sup_labels[:-effective_mbs])
-        if not self.buffer.is_empty():
-            assert effective_mbs > 0
-            loss_X += self.args.memory_penalty * \
-                self.loss(sup_mix_outputs[-effective_mbs:],
-                          sup_labels[-effective_mbs:])
-
-        if len(unsup_aug_inputs):
-            loss_U = F.mse_loss(unsup_norm_outputs,
-                                unsup_mix_outputs) / self.eye.shape[0]
-        else:
-            loss_U = 0
+            if len(unsup_aug_inputs):
+                loss_U = F.mse_loss(unsup_norm_outputs,
+                                    unsup_mix_outputs) / self.eye.shape[0]
+            else:
+                loss_U = 0
 
         # CIC LOSS
-        if self.task > 0 and self.epoch < self.args.n_epochs / 10 * 9:
+        if self.epoch < self.args.n_epochs / 10 * 9:
             W_inputs = sup_inputs
             W_probs = self.eye[sup_labels]
             perm = torch.randperm(W_inputs.shape[0])
@@ -287,13 +296,18 @@ class CCICEgapSS(EgapModel):
         self.wb_log['unsup_cic_loss'] = loss_U.item()
         # sup_mix_outputs = self.net.linear(sup_mix_embeddings)
         if loss is None:
-            loss = loss_X + self.args.lamda * loss_U
+            if self.epoch >= self.args.n_epochs / 10 * 9:
+                loss = 0
+            else:
+                loss = loss_X + self.args.lamda * loss_U
         else:
-            loss += loss_X + self.args.lamda * loss_U
+            if self.epoch >= self.args.n_epochs / 10 * 9:
+                pass
+            else:
+                loss += loss_X + self.args.lamda * loss_U
 
-        if self.args.buffer_size > 0 and sup_mask.sum() > 0:
-            self.buffer.add_data(examples=sup_inputs_for_buffer,
-                                labels=sup_labels_for_buffer)
+        self.buffer.add_data(examples=sup_inputs_for_buffer,
+                            labels=sup_labels_for_buffer)
 
         # SELF-SUPERVISED PAST TASKS NEGATIVE ONLY
         if self.task > 0 and self.epoch < self.args.n_epochs / 10 * 9:
@@ -322,13 +336,6 @@ class CCICEgapSS(EgapModel):
         
         if loss.requires_grad:
             loss.backward()
-        
 
-        # --------- EPOCH MGMT ----------
-        self.seen_batches += 1
-        if self.seen_batches == self.epoch_batches:
-            self.epoch += 1
-            self.seen_batches = 0
-        # -------------------------------
-
+        self.mng_epoch()
         return loss.item()
