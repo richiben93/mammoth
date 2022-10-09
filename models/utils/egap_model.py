@@ -29,7 +29,7 @@ class EgapModel(ContinualModel):
     def __init__(self, backbone, loss, args, transform):
         if args.rep_minibatch < 0:
             args.rep_minibatch = args.buffer_size
-        if args.replay_mode == 'none' or (args.replay_weight == 0 and args.model != 'er_ace_egap_ss'):
+        if args.replay_mode == 'none' or (args.replay_weight == 0 and not args.model.endswith('_ss')):
             args.replay_mode = 'none'
             args.replay_weight = 0
         super(EgapModel, self).__init__(backbone, loss, args, transform)
@@ -45,7 +45,7 @@ class EgapModel(ContinualModel):
 
     def get_name_extension(self):
         name = self.args.replay_mode.capitalize()
-        if self.args.replay_weight == 0 and self.args.model != 'er_ace_egap_ss':
+        if self.args.replay_weight == 0 and not self.args.model.endswith('_ss'):
             return name
         if len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B':
             name += f'NC{self.args.b_nclasses if self.args.b_nclasses is not None else self.N_CLASSES_PER_TASK}'
