@@ -8,7 +8,7 @@ all_data = pd.DataFrame(columns=['file', 'model', 'reg', 'buffer', 'task', 'accm
 files = []
 for rd, _, f in os.walk(root):
     for file in f:
-        if file == 'knn_11.txt':
+        if file == 'knn_5.txt':
             ffn = os.path.join(rd, file)
             with open(ffn, 'r') as f:
                 ddict = eval(f.readlines()[0])
@@ -29,7 +29,7 @@ cursed_idxes = cursed = ['DerppEgapb2NC10K10-E8mrT', 'DerppEgapb2NC10K10-70FsB',
     'ICarlNone-Mi7ND', 'ICarlNone-MYc7I', 'ICarlNone-DzvPO', 'ICarlNone-xJFGh', 'ICarlEgapb2NC10K10-v6EZ0',
     'PodnetEgapb2NC10K10-PZMe3', 'PodnetNone-Vw1GI']
 display(all_data[~all_data.file.isin(cursed_idxes)].groupby(['model', 'reg', 'buffer']).agg(aggf))
-
+print(all_data[~all_data.file.isin(cursed_idxes)].groupby(['model', 'reg', 'buffer']).agg(aggf).to_latex())
 # %%
 pd.set_option('display.max_rows', 100)
 # (all_data.model == 'xder_rpc_egap') & (all_data.reg == 'egap') &
