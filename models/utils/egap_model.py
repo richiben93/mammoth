@@ -35,7 +35,7 @@ class EgapModel(ContinualModel):
         super(EgapModel, self).__init__(backbone, loss, args, transform)
 
         self.buffer = Buffer(self.args.buffer_size, self.device, mode='balancoir') \
-            if len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B' else Buffer(self.args.buffer_size, self.device)
+            if 'ccic' in self.args.model or len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B' else Buffer(self.args.buffer_size, self.device)
 
         if len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B':
             self.nc = self.args.b_nclasses if self.args.b_nclasses is not None else self.N_CLASSES_PER_TASK
