@@ -107,7 +107,7 @@ def batch_hard_triplet_loss(labels, embeddings, k, margin=0, margin_type='soft')
 
     # Get thanchor_negative_diste true loss value
     loss = torch.mean(loss)
-    if loss < 0:
-        import pdb; pdb.set_trace()
+    # if loss < 0:
+    #     import pdb; pdb.set_trace()
 
     return loss

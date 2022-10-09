@@ -75,7 +75,7 @@ def get_parser() -> ArgumentParser:
 
     parser.add_argument('--alpha', type=float, default=0.5,
                         help='Unsupervised loss weight.')
-    parser.add_argument('--k', type=int, default=3,
+    parser.add_argument('--k', type=int, default=1,
                         help='k of kNN.')
     parser.add_argument('--memory_penalty', type=float,
                         default=1.0, help='Unsupervised penalty weight.')
@@ -291,8 +291,9 @@ class CCICEgapSS(EgapModel):
         else:
             loss += loss_X + self.args.lamda * loss_U
 
-        self.buffer.add_data(examples=sup_inputs_for_buffer,
-                             labels=sup_labels_for_buffer)
+        if self.args.buffer_size > 0 and sup_mask.sum() > 0:
+            self.buffer.add_data(examples=sup_inputs_for_buffer,
+                                labels=sup_labels_for_buffer)
 
         # SELF-SUPERVISED PAST TASKS NEGATIVE ONLY
         if self.task > 0 and self.epoch < self.args.n_epochs / 10 * 9:
@@ -318,9 +319,7 @@ class CCICEgapSS(EgapModel):
             loss += stream_egap_loss * self.args.stream_replay_weight
         # ---------------------------------
 
-        if self.args.buffer_size > 0 and sup_mask.sum() > 0:
-            self.buffer.add_data(examples=not_aug_inputs[sup_mask], labels=labels[sup_mask])
-
+        
         if loss.requires_grad:
             loss.backward()
         

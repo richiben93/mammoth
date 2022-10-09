@@ -136,11 +136,11 @@ class Buffer:
         else:
             masked_examples = self.examples
 
-        choice = np.random.choice(min(self.num_seen_examples, self.examples.shape[0]),
+        choice = np.random.choice(min(self.num_seen_examples, masked_examples.shape[0]),
                                   size=size, replace=False)
         if transform is None: transform = lambda x: x
         ret_tuple = (torch.stack([transform(ee.cpu())
-                            for ee in self.examples[choice]]).to(self.device),)
+                            for ee in masked_examples[choice]]).to(self.device),)
         for attr_str in self.attributes[1:]:
             if hasattr(self, attr_str):
                 attr = getattr(self, attr_str)
