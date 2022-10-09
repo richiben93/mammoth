@@ -111,7 +111,7 @@ class CCICEgapSS(EgapModel):
         self.embeddings = None
 
     def get_name(self):
-        return 'EraceSS' + self.get_name_extension()
+        return 'CCICSS' + self.get_name_extension()
 
     def begin_task(self, dataset):
         self.epoch_batches = len(dataset.train_loader)

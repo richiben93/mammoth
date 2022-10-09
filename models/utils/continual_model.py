@@ -100,7 +100,7 @@ class ContinualModel(nn.Module):
         return log_dir
 
     def reset_scheduler(self):
-        if len(self.args.lr_decay_steps) > 0 and self.args.n_epochs > 1:
+        if len(self.args.lr_decay_steps) > 0 and self.args.n_epochs > 1 and not 'ccic' in self.args.model:
             self.opt = SGD(self.net.parameters(), lr=self.args.lr, momentum=self.args.lr_momentum)
             self.scheduler = MultiStepLR(self.opt, milestones=self.args.lr_decay_steps, gamma=self.args.lr_decay)
 
