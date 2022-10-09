@@ -267,12 +267,13 @@ class CCICEgapSS(EgapModel):
                 loss_X += self.args.memory_penalty * \
                     self.loss(sup_mix_outputs[-effective_mbs:],
                             sup_labels[-effective_mbs:])
-
+            self.wb_log['loss_X'] = loss_X.item()
             if len(unsup_aug_inputs):
                 loss_U = F.mse_loss(unsup_norm_outputs,
                                     unsup_mix_outputs) / self.eye.shape[0]
             else:
                 loss_U = 0
+            self.wb_log['loss_U'] = loss_U.item()
 
         # CIC LOSS
         if self.epoch < self.args.n_epochs / 10 * 9:
@@ -292,8 +293,6 @@ class CCICEgapSS(EgapModel):
                                        margin=1, margin_type='hard')
         if loss is not None:
             self.wb_log['bhard_loss'] = loss.item()
-        self.wb_log['sup_cic_loss'] = loss_X.item()
-        self.wb_log['unsup_cic_loss'] = loss_U.item()
         # sup_mix_outputs = self.net.linear(sup_mix_embeddings)
         if loss is None:
             if self.epoch >= self.args.n_epochs / 10 * 9:
@@ -336,6 +335,6 @@ class CCICEgapSS(EgapModel):
         
         if loss.requires_grad:
             loss.backward()
-
+        self.opt.step()
         self.mng_epoch()
         return loss.item()
