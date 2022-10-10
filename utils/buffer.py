@@ -226,10 +226,10 @@ class Buffer:
         """
         if transform is None: transform = lambda x: x
         ret_tuple = (torch.stack([transform(ee.cpu())
-                            for ee in self.examples[:self.num_seen_examples]]).to(self.device),)
+                            for ee in self.examples]).to(self.device)[:self.num_seen_examples],)
         for attr_str in self.attributes[1:]:
             if hasattr(self, attr_str):
-                attr = getattr(self, attr_str)
+                attr = getattr(self, attr_str)[:self.num_seen_examples]
                 ret_tuple += (attr,)
         return ret_tuple
 

@@ -120,7 +120,7 @@ class CCICEgapSS(EgapModel):
 
     def end_task(self, dataset):
         super().end_task(dataset)
-        
+        self.embeddings = None
     
     def compute_embeddings(self):
         """
@@ -203,8 +203,8 @@ class CCICEgapSS(EgapModel):
                 masked_buf_inputs, masked_buf_labels = self.buffer.get_data(self.args.minibatch_size,
                                                                             mask_task=self.task, mask_task_cpt=self.cpt,
                                                                             transform=self.transform)
-                unsup_labels = torch.cat((torch.zeros(unsup_inputs.shape[0]).to(self.device),
-                                          torch.ones(masked_buf_labels.shape[0]).to(self.device))).long()
+                unsup_labels = torch.cat((torch.zeros(unsup_inputs.shape[0]).to(self.device) - 1,
+                                            masked_buf_labels)).long()
                 unsup_inputs = torch.cat((unsup_inputs, masked_buf_inputs))
         # -------------------------------------------
 
