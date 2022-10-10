@@ -236,3 +236,47 @@ ax[0,0].set_ylabel('ER-ACE')
 ax[1,0].set_ylabel('ER-ACE + CaSpeR')
 plt.savefig('plot2.pdf', bbox_inches='tight')
 # %%
+import seaborn as sns
+import pickle
+fig, axi = plt.subplots(2, 4, figsize=(5 * 1.3 * .9 * 2, 5 * 1.3 * .9), constrained_layout=True)
+ax = axi.T.flatten()
+evals = 25
+
+titles = ['ER-ACE', 'ER-ACE + CaSpeR',
+          'DER\\texttt{++}', 'DER\\texttt{++} + CaSpeR',
+          'iCaRL', 'iCaRL + CaSpeR',
+          'X-DER-RPC', 'X-DER-RPC + CaSpeR']
+
+
+for i, m in enumerate([ 'EraceNone-OBTUH', 'EraceEgapb2NC10K6-wjhoC',
+        'DerppNone-jBBdP', 'DerppEgapb2NC10K10-Mn2MC', 
+        'ICarlNone-YAiFM', 'ICarlEgapb2NC10K10-a95uQ', 
+         'XDerRPCNone-zIOsf', 'XDerRPCEgapb2NC16K4-qqMmc']):
+    a = pickle.load(open('/mnt/ext/egap_cps/' + m + '/fmapsFL.pkl', 'rb'))
+    a = a[1][:evals, :evals]
+    # sns.heatmap(a.abs() * (a.abs() > 0.11), ax=ax[i], cmap='Reds', cbar=False, vmin=0, vmax=1)
+    pcm = ax[i].pcolormesh((a.abs() * (a.abs() > 0.11)).flipud(), vmin=0, vmax=1, cmap='Reds')
+    # TODO trovare formula
+    ond = a[torch.eye(a.shape[0], dtype=torch.bool)].abs().sum() 
+    print(f'{m} - {offd} - {ond}')
+    ax[i].set_title(titles[i])
+    ax[i].set_aspect('equal', 'box')
+    for s in ax[i].spines:
+        myax.spines[s].set_color('#b0b0b0')
+        ax[i].spines[s].set_visible(True)
+    ax[i].set_xticks([])
+    ax[i].set_yticks([])
+    t = ax[i].text(evals-1, evals-1, f'DE: {ond:.2f}', va='top', ha='right', fontsize=13, color='k',
+        backgroundcolor='w')
+    t.get_bbox_patch().set_edgecolor('k')
+    
+    
+cbar = fig.colorbar(pcm, ax=axi[:, -1], location='right', aspect=40)
+cbar.ax.yaxis.get_major_formatter()._usetex = False
+cbar.ax.set_yticklabels(['0.', '.2', '.4', '.6', '.8', '1.'])
+cbar.ax.set_ylabel('Functional Map Magnitude $|C|$', rotation=90, va='bottom', fontsize=15, labelpad=25)
+
+plt.savefig('plot3.pdf', bbox_inches='tight')
+
+
+# %%
