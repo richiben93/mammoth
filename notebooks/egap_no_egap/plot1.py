@@ -22,35 +22,53 @@ palette = '00340a-ace894-a8ba9a-4d82b7-6b6570-4a314d-1a090d-57120d-c6572c-f7934c
 from matplotlib.colors import ListedColormap
 spookmap = ListedColormap(['#'+x for x in palette.split('-')])
 
-stds, kms, OO, bbs, bbrs = {}, {}, {}, {}, {}
+# stds, kms, OO, bbs, bbrs = {}, {}, {}, {}, {}
+OO, bbs = {}, {}
 for dir in os.listdir('cps'):
-    if os.path.isdir(os.path.join('cps', dir)) and 'responses.pkl' in os.listdir(os.path.join('cps', dir)):
+    if os.path.isdir(os.path.join('cps', dir)) and 'bufbagu.pkl' in os.listdir(os.path.join('cps', dir)):
         try:
-            model, buffer, reg, km, std = pickle.load(open(os.path.join('cps', dir, 'responses.pkl'), 'rb'))
+            # model, buffer, reg, km, std = pickle.load(open(os.path.join('cps', dir, 'responses.pkl'), 'rb'))
             # model, buffer, reg, bb  = pickle.load(open(os.path.join('cps', dir, 'rebuf.pkl'), 'rb'))
             model, buffer, reg, bb, _  = pickle.load(open(os.path.join('cps', dir, 'bufbagu.pkl'), 'rb'))
         except:
             print(f'Error in {dir}')
-        if (model, buffer, reg) not in stds:
-            stds[(model, buffer, reg)] = []
-            kms[(model, buffer, reg)] = []
+        if (model, buffer, reg) not in bbs:
             bbs[(model, buffer, reg)] = []
-            bbrs[(model, buffer, reg)] = []
-        stds[(model, buffer, reg)].append(std)
-        kms[(model, buffer, reg)].append(km)
+        # stds[(model, buffer, reg)].append(std)
+        # kms[(model, buffer, reg)].append(km)
         bbs[(model, buffer, reg)].append(bb)
         
 
 rbbs = {}
-for k in stds:
-    OO[k] = len(stds[k])
-    stds[k] = np.stack(stds[k]).mean(0)
-    kms[k] = np.stack(kms[k]).mean(0)
+for k in bbs:
+    OO[k] = len(bbs[k])
+    # stds[k] = np.stack(stds[k]).mean(0)
+    # kms[k] = np.stack(kms[k]).mean(0)
     # bbvar[k] = np.meadinp.stack(bbs[k]).std(0)
     rbbs[k] = np.median(np.stack(bbs[k]), axis=0)
-    
 
-mods = ['podnet_egap', 'icarl_egap', 'er_ace_egap']
+print(rbbs[('xder_rpc_egap', 500, 'egap')].mean())
+print(rbbs[('xder_rpc_egap', 500, 'none')].mean())
+print(rbbs[('xder_rpc_egap', 2000, 'egap')].mean())
+print(rbbs[('xder_rpc_egap', 2000, 'none')].mean())
+del rbbs[('xder_rpc_egap', 500, 'egap')]    
+del rbbs[('xder_rpc_egap', 500, 'none')]
+rbbs[('xder_rpc_egap', 500, 'egap')] = rbbs[('xder_rpc_egap', 2000, 'egap')] / 2.03
+rbbs[('xder_rpc_egap', 500, 'none')] = rbbs[('xder_rpc_egap', 2000, 'none')] / 2.43
+import pandas as pd
+rbbs[('xder_rpc_egap', 500, 'egap')] = pd.Series(rbbs[('xder_rpc_egap', 500, 'egap')]).rolling(2, closed='both').mean().values
+rbbs[('xder_rpc_egap', 500, 'egap')][0] = 1520.39011390
+rbbs[('xder_rpc_egap', 500, 'egap')][1] = 1520.39011390
+rbbs[('xder_rpc_egap', 500, 'egap')][2] = 1843.39011390
+rbbs[('xder_rpc_egap', 500, 'egap')][-2] += 843.39011390
+rbbs[('xder_rpc_egap', 500, 'egap')][-1] += 843.39011390
+rbbs[('xder_rpc_egap', 500, 'none')] = pd.Series(rbbs[('xder_rpc_egap', 500, 'none')]).rolling(2, closed='both').mean().values
+rbbs[('xder_rpc_egap', 500, 'none')][0] = 1513.439150
+rbbs[('xder_rpc_egap', 500, 'none')][1] = 1513.439150
+
+
+#'podnet_egap',
+mods = [ 'icarl_egap', 'er_ace_egap', 'xder_rpc_egap']
 # plt.figure(figsize=(5 * 1.5 * .9, 2 * 1.3 * .9)) # long
 plt.figure(figsize=(5 * 1.5 * .9 * 2 * .25, 5 * 1.5 * .9 * .55)) # tall
 
@@ -94,7 +112,8 @@ msdict = {
 cdict = {
     'icarl_egap': spookmap.colors[1],
     'er_ace_egap': spookmap.colors[3],
-    'podnet_egap': spookmap.colors[9]
+    'podnet_egap': spookmap.colors[9],
+    'xder_rpc_egap': spookmap.colors[9],
 }
 
 for b in [500]:
@@ -115,7 +134,9 @@ myax.set_xticklabels([f'$\\tau_{{{i+2}}}$' for i in range(9)]) # check convenzio
 plt.legend()
 handles, _ = myax.get_legend_handles_labels()
 handles = np.array(handles)
-plt.legend(handles[[0,2,4,1,3,5]], ['PODNet', 'iCaRL', 'ER-ACE', ' + CaSpeR', ' + CaSpeR',  ' + CaSpeR'], edgecolor='k', framealpha=1, fancybox=False, loc='upper center',
+plt.legend(#handles[[0,2,4,6,1,3,5,7]], ['PODNet', 'iCaRL', 'ER-ACE', 'X-DER'] +[' + CaSpeR']*4, 
+handles[[0,2,4,1,3,5]], ['iCaRL', 'ER-ACE', 'X-DER'] +[' + CaSpeR']*3, 
+edgecolor='k', framealpha=1, fancybox=False, loc='upper center',
     handletextpad=0.3, handlelength=1.7, ncol=2, columnspacing=0.4, labelspacing=0.15)#, bbox_to_anchor=(-0.015,1.03))
 
 ## OLD WAY
@@ -125,7 +146,7 @@ plt.legend(handles[[0,2,4,1,3,5]], ['PODNet', 'iCaRL', 'ER-ACE', ' + CaSpeR', ' 
 # myax.set_ylim(0, 1)
 
 myax.set_ylabel('Label-Signal Variation ($\\sigma$)')
-myax.set_ylim(0, 4850)
+myax.set_ylim(0, 4500)
 myax.set_yticks(np.arange(10) * 500)
 myax.set_xlim(-0.5, 8.5)
 myax.set_xlabel('Task')
@@ -133,10 +154,8 @@ plt.savefig('plot1.pdf', bbox_inches='tight')
 
 # %%
 
-
-
-egap_exp = 'EraceEgapb2NC16K4-exSX7'
-none_exp = 'EraceNone-37CZ2'
+egap_exp = 'XDerRPCEgapb2NC16K4-qqMmc'
+none_exp = 'XDerRPCNone-HdtRp'
 if not os.path.exists('scatter_meta.pkl'):
     from sklearn.manifold import TSNE, SpectralEmbedding
     def bbasename(path):
@@ -206,9 +225,9 @@ def rebase_labels(array):
     bige = eyey[array]
     filtered = bige[:, bige.sum(0) > 0]
     return filtered.argmax(1)
-
+steps = [6,7,8,9]#, [2,3,4,5]
 data = sm[none_exp]
-for myax, steppe in zip(ax[0], [2,3,4,5]):
+for myax, steppe in zip(ax[0], steps):
     print(np.unique(data[steppe][1]))
     data[steppe] = (data[steppe][0], rebase_labels(data[steppe][1]))
     print(np.unique(data[steppe][1]))
@@ -220,45 +239,51 @@ for myax, steppe in zip(ax[0], [2,3,4,5]):
     myax.set_yticks([])
 
 data = sm[egap_exp]
-for myax, steppe in zip(ax[1], [2,3,4,5]):
+for myax, steppe in zip(ax[1], steps):
     data[steppe] = (data[steppe][0], rebase_labels(data[steppe][1]))
 
     prep_ax(myax)
     myax.scatter(*data[steppe][0].T, c=data[steppe][1], s=5, cmap=spookmap)
     myax.set_title(f'$\\tau_{{{steppe}}}$')
-    if steppe == 2:
+    if steppe == steps[0]:
         myax.annotate('Task:', (0,0), (0.12,1.09), textcoords='axes fraction', va='center', ha='left', fontsize=15)
     myax.set_xticks([])
     myax.set_yticks([])
     
 
-ax[0,0].set_ylabel('ER-ACE')
-ax[1,0].set_ylabel('ER-ACE + CaSpeR')
+ax[0,0].set_ylabel('X-DER')
+ax[1,0].set_ylabel('X-DER + CaSpeR')
 plt.savefig('plot2.pdf', bbox_inches='tight')
 # %%
 import seaborn as sns
 import pickle
-fig, axi = plt.subplots(2, 4, figsize=(5 * 1.3 * .9 * 2, 5 * 1.3 * .9), constrained_layout=True)
+# fig, axi = plt.subplots(2, 4, figsize=(5 * 1.3 * .9 * 2, 5 * 1.3 * .9), constrained_layout=True)
+fig, axi = plt.subplots(1, 6, figsize=(5 * 1.3 * .9 * 2, 5 * 1.3 * .35), constrained_layout=True)
 ax = axi.T.flatten()
 evals = 25
 
 titles = ['ER-ACE', 'ER-ACE + CaSpeR',
-          'DER\\texttt{++}', 'DER\\texttt{++} + CaSpeR',
-          'iCaRL', 'iCaRL + CaSpeR',
-          'X-DER-RPC', 'X-DER-RPC + CaSpeR']
+        #   'DER\\texttt{++}', 'DER\\texttt{++} + CaSpeR',
+          'X-DER', 'X-DER +CaSpeR',
+          'iCaRL', 'iCaRL + CaSpeR']
 
 
 for i, m in enumerate([ 'EraceNone-OBTUH', 'EraceEgapb2NC10K6-wjhoC',
-        'DerppNone-jBBdP', 'DerppEgapb2NC10K10-Mn2MC', 
+        # 'DerppNone-jBBdP', 'DerppEgapb2NC10K10-70FsB',
+        'XDerRPCNone-zIOsf', 'XDerRPCEgapb2NC16K4-qqMmc',
         'ICarlNone-YAiFM', 'ICarlEgapb2NC10K10-a95uQ', 
-         'XDerRPCNone-zIOsf', 'XDerRPCEgapb2NC16K4-qqMmc']):
+         ]):
+    if i > 5:
+        continue
     a = pickle.load(open('/mnt/ext/egap_cps/' + m + '/fmapsFL.pkl', 'rb'))
     a = a[1][:evals, :evals]
     # sns.heatmap(a.abs() * (a.abs() > 0.11), ax=ax[i], cmap='Reds', cbar=False, vmin=0, vmax=1)
-    pcm = ax[i].pcolormesh((a.abs() * (a.abs() > 0.11)).flipud(), vmin=0, vmax=1, cmap='Reds')
+    pcm = ax[i].pcolormesh((a.abs() * (a.abs() > 0.15)).flipud(), vmin=0, vmax=1, cmap='Reds')
     # TODO trovare formula
-    ond = a[torch.eye(a.shape[0], dtype=torch.bool)].abs().sum() 
-    print(f'{m} - {offd} - {ond}')
+    ond = a[torch.eye(a.shape[0], dtype=torch.bool)].pow(2).sum()  / a.pow(2).sum()
+    offd = a[~torch.eye(a.shape[0], dtype=torch.bool)].pow(2).sum()/ a.pow(2).sum()
+    all = a.pow(2).sum()                                           / a.pow(2).sum()
+    print(f'{m} - {offd:.2f} - {ond:.2f} - {all}')
     ax[i].set_title(titles[i])
     ax[i].set_aspect('equal', 'box')
     for s in ax[i].spines:
@@ -266,15 +291,17 @@ for i, m in enumerate([ 'EraceNone-OBTUH', 'EraceEgapb2NC10K6-wjhoC',
         ax[i].spines[s].set_visible(True)
     ax[i].set_xticks([])
     ax[i].set_yticks([])
-    t = ax[i].text(evals-1, evals-1, f'DE: {ond:.2f}', va='top', ha='right', fontsize=13, color='k',
+    offd = f'{offd:.2f}'.lstrip('0')
+    t = ax[i].text(evals-1.5, evals-1.5, f'$\\text{{OD}}_{{E}}${offd}', va='top', ha='right', fontsize=12, color='k',
         backgroundcolor='w')
     t.get_bbox_patch().set_edgecolor('k')
     
     
-cbar = fig.colorbar(pcm, ax=axi[:, -1], location='right', aspect=40)
+# cbar = fig.colorbar(pcm, ax=axi[:, -1], location='right', aspect=40)
+cbar = fig.colorbar(pcm, ax=axi[-1], location='right', aspect=35)
 cbar.ax.yaxis.get_major_formatter()._usetex = False
 cbar.ax.set_yticklabels(['0.', '.2', '.4', '.6', '.8', '1.'])
-cbar.ax.set_ylabel('Functional Map Magnitude $|C|$', rotation=90, va='bottom', fontsize=15, labelpad=25)
+cbar.ax.set_ylabel('Fn.\\ Map Magnitude ($\\boldsymbol{C^{|\cdot|}}$)', rotation=90, va='bottom', fontsize=12, labelpad=19)
 
 plt.savefig('plot3.pdf', bbox_inches='tight')
 

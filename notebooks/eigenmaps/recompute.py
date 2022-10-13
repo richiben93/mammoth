@@ -58,7 +58,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 cpas = ['DerppEgapb2NC10K10-Mn2MC', 'DerppEgapb2NC10K10-70FsB']
 cpbs = ['DerppNone-jBBdP',]#'DerppNone-Th2IC', 'DerppNone-HPx0g', 'DerppNone-ZjsSx']
-cpas = [x for x in cpas if x not in cursed_idxes]
+# cpas = [x for x in cpas if x not in cursed_idxes]
 cpbs = [x for x in cpbs if x not in cursed_idxes]
 
 # a = pickle.load(open('../egap_no_egap/cps/EraceNone-cc395/fmaps.pkl', 'rb'))

@@ -45,7 +45,7 @@ device = get_device()
 from datasets.seq_cifar100 import SequentialCIFAR100_10x10
 print('-- Searching run', args.foldername)
 model, buf_size, reg = find_args(args.foldername)
-if os.path.exists(os.path.join(args.foldername, 'bufeats.pkl')):
+if os.path.exists(os.path.join(args.foldername, 'testfeats.pkl')):
     print("-- ALREADY DONE, ABORTING\n")
     exit()
 
@@ -58,7 +58,7 @@ args = Namespace(
 )
 dataset = SequentialCIFAR100_10x10(args)
 dataset.get_data_loaders()
-# data_loaders = [dataset.get_data_loaders()[0] for _ in range(dataset.N_TASKS)]
+data_loaders = [dataset.get_data_loaders()[0] for _ in range(2)]
 
 
 mymodel = "Derpp"#'Erace'
@@ -77,34 +77,30 @@ for id_task in range(1, 11):
     sd = torch.load(path + f'task_{id_task}.pt', map_location='cpu')
     net.load_state_dict(sd)
     net.eval()
-    buf = pickle.load(open(path + f'task_{id_task}_buffer.pkl', 'rb'))
-
     all_data[(model, reg, buf_size)][id_task] = {}
     all_data[(model, reg, buf_size)][id_task]['net'] = net
-    all_data[(model, reg, buf_size)][id_task]['buf'] = buf
 
 print('-- Computing projections')
 for id_task in tqdm(range(1, 11)):
-    
-    
     net = all_data[(model, reg, buf_size)][id_task]['net']
     net.to(device)    
-
-    buf = all_data[(model, reg, buf_size)][id_task]['buf']
-    bufdata = buf.get_data(buf.buffer_size, transform=dataset.test_loaders[0].dataset.transform.transforms[1])
-    bx, by = bufdata[0], bufdata[1]
-    bx = bx.to(device)
-    by = by
-    bproj = net.features(bx).cpu()
-    all_data[(model, reg, buf_size)][id_task][f'bproj'] = bproj
-    all_data[(model, reg, buf_size)][id_task][f'by'] = by
+    good_labels = torch.tensor([0, 2, 5, 8, 9, 11, 13, 14, 16, 18])
+    feats, labels = [], []
+    for d in dataset.test_loaders:
+        for x, y in d:
+            bx = x.to(device)
+            if torch.isin(y, good_labels).any():
+                bproj = net.features(bx[torch.isin(y, good_labels)]).cpu()
+                feats.append(bproj)
+                labels.append(y[torch.isin(y, good_labels)])
+    all_data[(model, reg, buf_size)][id_task][f'bproj'] = torch.cat(feats)
+    all_data[(model, reg, buf_size)][id_task][f'by'] = torch.cat(labels)
     
     net.to('cpu')
 
 for id_task in tqdm(range(1, 11)):
     del all_data[(model, reg, buf_size)][id_task]['net']
-    del all_data[(model, reg, buf_size)][id_task]['buf']
 
-print('-- Saving to', os.path.join(foldername, 'bufeats.pkl'), '\n')
-with open(os.path.join(foldername, 'bufeats.pkl'), 'wb') as f:
+print('-- Saving to', os.path.join(foldername, 'testfeats.pkl'), '\n')
+with open(os.path.join(foldername, 'testfeats.pkl'), 'wb') as f:
     pickle.dump(all_data, f)
