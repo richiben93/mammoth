@@ -12,28 +12,29 @@ common_props = {"output": "sbatch/mammoth/list_sbatch.txt", "title": None}
 common_grid = {
     "dataset": ["seq-cifar100-10x10"],  # "seq-cifar100-10x10"],
     "wandb": [True],
-    "batch_size": ["32"],
+    "wb_prj": ["rodo-istats"],
+    "batch_size": ["64"],
     "lr": ["0.1"],
-    "n_epochs": ["50"],
-    "lr_decay_steps": ["35,45"],
+    "n_epochs": ["20"],
+    "lr_decay_steps": [],
     "buffer_size": ["2000"],
-    "minibatch_size": ["32"],
+    "minibatch_size": ["64"],
     "save_checks": [],
     "custom_log": [],
 }
 
-props = {**common_props, "title": "erace - egap2", "comment_previous": True}
+props = {**common_props, "title": None, "comment_previous": False}
 grid = {
     **common_grid,
-    "model": ["er_ace_replay"],  # "joint_replay", "er_ace_replay"],
-    "lr": ["0.1", "0.03"],
-    "rep_minibatch": ["512"],
-    "heat_kernel": [],
-    "knn_laplace": ["20"],
-    "fmap_dim": ["160"],
-    "replay_mode": ["egap2"],    # egap2 egap2-1 egap3
-    "cos_dist": [True, False],
-    "replay_weight": ["0.01", "0.001"],
+    "lr": ["0.3"],
+    "wd_reg": ["1e-5"],
+    "model": ["icarl_egap"],  # "joint_replay", "er_ace_replay"],
+    "rep_minibatch": ["64"],
+    "replay_mode": ["none"],    # egap2 egap2-1 egap3 egapB2
+    "heat_kernel": [False, True],
+    "knn_laplace": ["10"],
+    "cos_dist": [False, True],
+    "replay_weight": ["0.01", "0.001", "0.0001"],
     "save_checks": [],
     "custom_log": [],
 }

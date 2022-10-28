@@ -15,7 +15,7 @@ class EgapModel(ContinualModel):
                             help='Size of pre-dataset minibatch replay (for x, lats and dists).')
         parser.add_argument('--replay_mode', type=str, required=True, help='What you replay.',
                             choices=['none', 'egap', 'egap2', 'egap2-1', 'egap2+1', 'egap3', 'egap2m',
-                                     'egapB2', 'egapB2-1'])
+                                     'egapB2', 'egapB2-1', 'gkd'])
 
         parser.add_argument('--replay_weight', type=float, required=True, help='Weight of replay.')
 
@@ -76,6 +76,10 @@ class EgapModel(ContinualModel):
             A, D, L = calc_ADL_heat(dists)
         else:
             A, D, L = calc_ADL_knn(dists, k=self.args.knn_laplace, symmetric=True)
+
+        if self.args.replay_mode == 'gkd':
+            lab_mask = labels.unsqueeze(0) == labels.unsqueeze(1)
+            return A[~lab_mask].sum()
 
         L = torch.eye(A.shape[0], device=A.device) - normalize_A(A, D)
 

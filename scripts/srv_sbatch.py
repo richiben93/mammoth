@@ -11,7 +11,7 @@ parser.add_argument('--cycles', type=int, default=1, help='The number of cycles.
 parser.add_argument('--max_jobs', type=int, default=None, help='The maximum number of jobs.')
 parser.add_argument('--exclude', type=str, default='', help='excNodeList.')
 parser.add_argument('--n_gpus', type=int, default=1, help='Number of requested GPUs per job')
-parser.add_argument('--custom_time', default=None, type=str, help='customizes sbatch time')
+parser.add_argument('--time', default=None, type=str, help='customizes sbatch time')        # "minutes", "minutes:seconds", "hours:minutes:seconds"
 parser.add_argument('--user_name', type=str, default='efrascaroli')
 parser.add_argument('--envname', type=str, default='SRV-Continual')
 parser.add_argument('--sbacciu', action='store_true', help='Sbatch just after finishing to generate the file')
@@ -77,7 +77,7 @@ gridsh = gridsh.replace('<xcld>', ('#SBATCH --exclude='+args.exclude) if len(arg
 gridsh = gridsh.replace('<nick>', nickname)
 gridsh = gridsh.replace('<mj>', str(max_jobs))
 gridsh = gridsh.replace('<ngpu>', str(args.n_gpus))
-gridsh = gridsh.replace('<time>', ('#SBATCH --time=' + args.custom_time) if args.custom_time is not None else '')
+gridsh = gridsh.replace('<time>', ('#SBATCH --time=' + args.time) if args.time is not None else '')
 
 with open(args.sh_out, 'w') as f:
     f.write(gridsh)

@@ -12,7 +12,7 @@ def get_parser() -> ArgumentParser:
     parser.add_argument('--grad_clip', default=0, type=float, help='Clip the gradient.')
     parser.add_argument('--erace_weight', type=float, default=1., help='Weight of erace.')
 
-    # --csc_weight, --ct_weight, --ct_temperature
+    # --csc_weight 3, --ct_weight 1.5, --ct_temperature
     CscCtModel.add_replay_args(parser)
     
     return parser
