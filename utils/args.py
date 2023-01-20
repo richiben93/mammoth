@@ -3,7 +3,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 from datetime import datetime
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Action
 from datasets import NAMES as DATASET_NAMES
 from models import get_all_models
 
@@ -52,6 +52,10 @@ def add_management_args(parser: ArgumentParser) -> None:
                         help='Enable log (custom for each model, must be implemented)')
     parser.add_argument('--save_checks', action='store_true',
                         help='Save checkpoints')
+    parser.add_argument('--end_task', type=int, default=None, help='Last task to train on')
+    parser.add_argument('--start_task', type=int, default=0,
+                        help='First task to train on (evaluation on previous tasks done normally)')
+    parser.add_argument('--load_check', type=str, default=None, help='Load checkpoint (insert path)')
     parser.add_argument('--validation', action='store_true',
                         help='Test on the validation set')
     parser.add_argument('--set_device', default=None, type=str)
@@ -66,6 +70,7 @@ def add_rehearsal_args(parser: ArgumentParser) -> None:
                         help='The size of the memory buffer.')
     parser.add_argument('--minibatch_size', type=int, required=True,
                         help='The batch size of the memory buffer.')
+    parser.add_argument('--load_buffer', type=str, default=None, help='Load buffer (insert path)')
 
 
 def add_aux_dataset_args(parser: ArgumentParser) -> None:

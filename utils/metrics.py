@@ -26,7 +26,7 @@ def forward_transfer(results, random_results):
 
 def forgetting(results):
     n_tasks = len(results)
-    li = list()
+    li = []
     for i in range(n_tasks - 1):
         results[i] += [0.0] * (n_tasks - len(results[i]))
     np_res = np.array(results)
@@ -35,3 +35,16 @@ def forgetting(results):
         li.append(maxx[i] - results[-1][i])
 
     return np.mean(li)
+
+
+def normgetting(results):
+    n_tasks = len(results)
+    for i in range(n_tasks - 1):
+        results[i] += [0.0] * (n_tasks - len(results[i]))
+    acc_mat = np.array(results)
+    baseline = acc_mat[-1, :-1]
+    best_prev = np.maximum(acc_mat[:-1, :-1].max(axis=0), 0.0001)
+    mforg = ((best_prev - baseline) / (best_prev))
+    mforg[mforg < 0] = 0
+    forg = mforg.mean() * 100
+    return forg

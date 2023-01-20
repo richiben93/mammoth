@@ -37,7 +37,7 @@ def baguette_fill_buffer(self: ContinualModel, mem_buffer: Buffer, dataset, t_id
 
     if t_idx > 0:
         # 1) First, subsample prior classes
-        buf_x, buf_y, buf_l = self.buffer.get_all_data()
+        buf_x, buf_y, buf_l = mem_buffer.get_all_data()
 
         mem_buffer.empty()
         for _y in buf_y.unique():
