@@ -35,7 +35,6 @@ class MyCIFAR100(CIFAR100):
                  target_transform=None, download=False) -> None:
         self.not_aug_transform = transforms.Compose([transforms.ToTensor()])
         self.root = root
-        print(root)
         super(MyCIFAR100, self).__init__(root, train, transform, target_transform, not self._check_integrity())
 
     def __getitem__(self, index: int) -> Tuple[type(Image), int, type(Image)]:

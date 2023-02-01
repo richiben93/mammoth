@@ -44,7 +44,9 @@ class ContinualModel(nn.Module):
         self.dataset_name = dataset.NAME
         self.N_CLASSES = self.N_TASKS * self.N_CLASSES_PER_TASK
         dataset.get_data_loaders()
-        self.class_names = dataset.train_loader.dataset.classes
+        self.class_names = []
+        if hasattr(dataset.train_loader.dataset, 'classes'):
+            self.class_names = dataset.train_loader.dataset.classes
 
         self.args.name = self.get_name()
         self.wblogger = WandbLogger(self.args, name=self.args.name, prj=self.args.wb_prj, entity=self.args.wb_entity)

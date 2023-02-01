@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 from backbone.ResNet18 import resnet18
 from backbone.EfficientNet import mammoth_efficientnet
 import torch.nn.functional as F
-from utils.conf import base_path
+from utils.conf import base_path, base_path_dataset
 from PIL import Image
 import os
 from datasets.utils.validation import get_train_val
@@ -123,13 +123,13 @@ class SequentialMiniImagenet(ContinualDataset):
         test_transform = transforms.Compose(
             [transforms.ToTensor(), self.get_normalization_transform()])
 
-        train_dataset = MyMiniImagenet(base_path() + 'MINIIMG',
+        train_dataset = MyMiniImagenet(base_path_dataset() + 'MINIIMG',
                                  train=True, download=True, transform=transform)
         if self.args.validation:
             train_dataset, test_dataset = get_train_val(train_dataset,
                                                     test_transform, self.NAME)
         else:
-            test_dataset = MiniImagenet(base_path() + 'MINIIMG',
+            test_dataset = MiniImagenet(base_path_dataset() + 'MINIIMG',
                         train=False, download=True, transform=test_transform)
 
         train, test = store_masked_loaders(train_dataset, test_dataset, self)

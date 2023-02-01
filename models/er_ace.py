@@ -73,5 +73,5 @@ class ErACE(ContinualModel):
         with open(path, 'rb') as f:
             self.buffer = pickle.load(f)
             # FIX for representative buffer
-            self.buffer.num_seen_examples *= self.args.n_epochs
+            # self.buffer.num_seen_examples *= self.args.n_epochs
             self.buffer.to(self.device)

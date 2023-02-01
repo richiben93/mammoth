@@ -26,7 +26,7 @@ def get_parser() -> ArgumentParser:
     add_rehearsal_args(parser)
 
     parser.add_argument('--clip_weight', type=float, default=1)
-    parser.add_argument('--clip_stream', action='store_true')
+    parser.add_argument('--clip_stream', action='store_true', help='Use clip loss also on stream')
     return parser
 
 def sim_matrix(a, b, eps=1e-8):
