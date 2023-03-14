@@ -1,4 +1,5 @@
 import wandb
+import wandbbq
 from argparse import Namespace
 from utils import random_id
 
@@ -18,7 +19,7 @@ class WandbLogger:
         if self.active:
             if name is not None:
                 name += f'-{self.run_id}'
-            wandb.init(project=prj, entity=entity, config=innested_vars(args), name=name)
+            wandbbq.init(project=prj, entity=entity, config=innested_vars(args), name=name)
 
     def __call__(self, obj: any, **kwargs):
         if wandb.run:

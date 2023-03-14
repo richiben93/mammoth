@@ -99,6 +99,7 @@ args=(
 )
 export PYTHONPATH={os.getcwd()}
 cd {os.getcwd()}
+{'export WANDBBQ_RELAY=login02' if args.cineca else ''}
 
 """ + jobstring + '\nwait'
 
@@ -123,6 +124,7 @@ cd {os.getcwd()}
 {"#SBATCH -A IscrB_LEGOCEMM" if args.cineca else "#SBATCH -A ricerca_generica"}
 {"#SBATCH -p m100_all_serial" if args.cineca else ""}
 
+{"conda activate SRV-Continual" if not args.cineca and not args.silendo else ""}
 cat {errbase}/*{jobid}* | grep 'wandb sync' | sed 's/^wandb: //g' | xargs -i bash -c {{}}
 """
 
