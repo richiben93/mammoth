@@ -12,7 +12,7 @@ def innested_vars(args: Namespace):
 
 
 class WandbLogger:
-    def __init__(self, args: Namespace, prj='rodo-super', entity='regaz', name=None):
+    def __init__(self, args: Namespace, prj='casper-icml', entity='regaz', name=None):
         self.active = args.wandb
         self.run_id = random_id(5)
         if self.active:

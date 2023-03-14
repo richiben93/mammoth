@@ -83,6 +83,10 @@ def parse_args():
         get_parser = getattr(mod, 'get_parser')
         parser = get_parser()
         args = parser.parse_args()
+        # init batch_sizes
+        for key, value in vars(args).items():
+            if 'batch_size' in key and 'batch_size' != key and value is None:
+                setattr(args, key, args.batch_size)
 
     if args.seed is not None:
         set_random_seed(args.seed)

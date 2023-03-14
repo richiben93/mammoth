@@ -68,8 +68,8 @@ def add_rehearsal_args(parser: ArgumentParser) -> None:
     """
     parser.add_argument('--buffer_size', type=int, required=True,
                         help='The size of the memory buffer.')
-    parser.add_argument('--minibatch_size', type=int, required=True,
-                        help='The batch size of the memory buffer.')
+    parser.add_argument('--minibatch_size', type=int, default=None,
+                        help='The batch size of the memory buffer (default=batch_size).')
     parser.add_argument('--load_buffer', type=str, default=None, help='Load buffer (insert path)')
 
 
