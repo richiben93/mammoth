@@ -2,7 +2,7 @@ from copy import deepcopy
 
 from torch import nn
 from torch.utils.data import TensorDataset, DataLoader
-from torchvision.transforms import RandomResizedCrop, RandomHorizontalFlip, ColorJitter, RandomGrayscale
+from torchvision.transforms import RandomResizedCrop, RandomHorizontalFlip, ColorJitter, RandomGrayscale, RandomApply
 
 from backbone.SupCon_Resnet import SupConResNet
 from utils.augmentations import normalize
@@ -53,6 +53,7 @@ class SCR(ContinualModel):
         self.class_means = None
         self.dataset = get_dataset(args)
 
+        self.denorm = self.dataset.get_denormalization_transform()
         # Instantiate buffers
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.transform = nn.Sequential(
@@ -60,7 +61,7 @@ class SCR(ContinualModel):
                               scale=(0.2, 1.)),
             RandomHorizontalFlip(),
             # ColorJitter(0.4, 0.4, 0.4, 0.1, p=0.8),
-            ColorJitter(0.4, 0.4, 0.4, 0.1),
+            RandomApply([ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
             RandomGrayscale(p=0.2)
 
         )
@@ -75,10 +76,12 @@ class SCR(ContinualModel):
                 self.compute_class_means()
                 self.class_means = self.class_means.squeeze()
 
+        x = torch.stack([self.denorm(_x) for _x in x])
         # feats = self.net.features(x).squeeze()
         feats = self.net.features(x).float().squeeze()
 
         feats = feats.reshape(feats.shape[0], -1)
+        feats = F.normalize(feats, dim=1)
         feats = feats.unsqueeze(1)
 
         pred = (self.class_means.unsqueeze(0) - feats).pow(2).sum(2)
@@ -91,6 +94,7 @@ class SCR(ContinualModel):
             self.register_buffer('classes_so_far', torch.cat((
                 self.classes_so_far, labels.to('cpu'))).unique())
         loss = 0
+        self.class_means = None
         self.opt.zero_grad()
         if not self.buffer.is_empty():
             buf_inputs, buf_labels = self.buffer.get_data(
@@ -109,65 +113,18 @@ class SCR(ContinualModel):
 
         return loss
 
-    # def begin_task(self, dataset):
-    #     if self.current_task > 0:
-    #         dataset.train_loader.dataset.targets = np.concatenate(
-    #             [dataset.train_loader.dataset.targets,
-    #              self.buffer.labels.cpu().numpy()[:self.buffer.num_seen_examples]])
-    #         if type(dataset.train_loader.dataset.data) == torch.Tensor:
-    #             dataset.train_loader.dataset.data = torch.cat(
-    #                 [dataset.train_loader.dataset.data, torch.stack([(
-    #                     self.buffer.examples[i].type(torch.uint8).cpu())
-    #                     for i in range(self.buffer.num_seen_examples)]).squeeze(1)])
-    #         else:
-    #             dataset.train_loader.dataset.data = np.concatenate(
-    #                 [dataset.train_loader.dataset.data, torch.stack([((self.buffer.examples[i] * 255).type(
-    #                     torch.uint8).cpu()) for i in range(self.buffer.num_seen_examples)]).numpy().swapaxes(
-    #                     1, 3)])
-
     def end_task(self, dataset) -> None:
-
-        # self.new_labels_zombie = deepcopy(self.new_labels)
-        # self.new_labels.clear()
-        self.net.train()
-        if type(dataset.train_loader.dataset.data) == torch.Tensor:
-            mem_x = torch.stack([(
-                self.buffer.examples[i].type(torch.uint8).cpu())
-                for i in range(self.buffer.num_seen_examples)]).squeeze(1)
-        else:
-            mem_x = self.buffer.examples[:self.buffer.num_seen_examples].cpu()
-        mem_y = self.buffer.labels.cpu()[:self.buffer.num_seen_examples].float()
-        # criterion = torch.nn.CrossEntropyLoss(reduction='mean')
-        if mem_x.size(0) > 0:
-            rv_dataset = TensorDataset(mem_x, mem_y)
-            rv_loader = DataLoader(rv_dataset, batch_size=self.args.batch_size, shuffle=True, num_workers=0,
-                                   drop_last=True)
-            for i, batch_data in enumerate(rv_loader):
-                # batch update
-                batch_x, batch_y = batch_data
-                batch_x = batch_x.to(self.device)
-                batch_y = batch_y.to(self.device)
-                logits = torch.cat([self.net.forward(batch_x).unsqueeze(1),
-                                    self.net.forward(self.transform(batch_x)).unsqueeze(1)], dim=1)
-                loss = self.loss(logits, batch_y)
-                self.opt.zero_grad()
-                loss.backward()
-                params = [p for p in self.net.parameters() if p.requires_grad and p.grad is not None]
-                grad = [p.grad.clone() / 10. for p in params]
-                for g, p in zip(grad, params):
-                    p.grad.data.copy_(g)
-                self.opt.step()
         self.current_task += 1
         self.class_means = None
 
+    @torch.no_grad()
     def compute_class_means(self) -> None:
         """
         Computes a vector representing mean features for each class.
         """
         # This function caches class means
-        transform = self.dataset.get_normalization_transform()
         class_means = []
-        examples, labels = self.buffer.get_all_data(transform)
+        examples, labels = self.buffer.get_all_data(None)
         for _y in self.classes_so_far:
             x_buf = torch.stack(
                 [examples[i]
@@ -175,5 +132,8 @@ class SCR(ContinualModel):
                  if labels[i].cpu() == _y]
             ).to(self.device)
             with bn_track_stats(self, False):
-                class_means.append(self.net.features(x_buf).mean(0).flatten())
+                all_feats = self.net.features(x_buf).squeeze()
+                all_feats = all_feats / all_feats.norm(dim=1, keepdim=True)
+                class_means.append(all_feats.mean(0).flatten())
         self.class_means = torch.stack(class_means)
+        self.class_means = self.class_means / self.class_means.norm(dim=1, keepdim=True)
