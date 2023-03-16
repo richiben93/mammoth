@@ -1,14 +1,24 @@
 from torch import nn
 from torch.functional import F
 import backbone.ResNet18 as res18
+from backbone.EfficientNet import mammoth_efficientnet
+from datasets.seq_miniimg import SequentialMiniImagenet
 
 
 class SupConResNet(nn.Module):
     """backbone + projection head"""
-    def __init__(self, dim_in=160, head='mlp', feat_dim=128, backbone='resnet18'):
+    def __init__(self, head='mlp', feat_dim=128, backbone='resnet18'):
         super(SupConResNet, self).__init__()
-        self.encoder = getattr(res18, backbone)(100)
-        dim_in = self.encoder.nf * 8 * self.encoder.block.expansion
+        if backbone in ['resnet18', 'lopeznet']:
+            self.encoder = getattr(res18, backbone)(100)
+            dim_in = self.encoder.nf * 8 * self.encoder.block.expansion
+        elif backbone == 'efficientnet':
+            self.encoder = mammoth_efficientnet(SequentialMiniImagenet.N_CLASSES_PER_TASK * SequentialMiniImagenet.N_TASKS, 'efficientnet-b2')
+            dim_in = self.encoder.classifier.in_features
+        else:
+            raise NotImplementedError(
+                'backbone not supported: {}'.format(backbone))
+
         if head == 'linear':
             self.head = nn.Linear(dim_in, feat_dim)
         elif head == 'mlp':

@@ -28,16 +28,15 @@ def get_parser() -> ArgumentParser:
     parser.add_argument('--temp', type=float, required=True,
                         help='Temperature for loss.')
     parser.add_argument('--head', type=str, required=False, default='mlp')
-    parser.add_argument('--backbone', type=str, required=False, default='resnet18', choices=['resnet18', 'lopeznet'])
+    parser.add_argument('--backbone', type=str, required=False, default='resnet18', choices=['resnet18', 'lopeznet',
+                                                                                             'efficientnet'])
     return parser
 
 
 input_size_match = {
     'seq-cifar100-10x10': [3, 32, 32],
     'seq-cifar10': [3, 32, 32],
-    'core50': [3, 128, 128],
-    'mini_imagenet': [3, 84, 84],
-    'openloris': [3, 50, 50]
+    'seq-miniimg': [3, 84, 84],
 }
 
 
@@ -46,8 +45,9 @@ class SCR(ContinualModel):
     COMPATIBILITY = ['class-il', 'task-il']
 
     def __init__(self, backbone, loss, args, transform):
-        if args.dataset == 'mini_imagenet':
-            backbone = SupConResNet(640, head=args.head, backbone=args.backbone)
+        if args.dataset == 'seq-miniimg':
+            assert args.backbone == 'efficientnet'
+            backbone = SupConResNet(head=args.head, backbone=args.backbone)
         else:
             backbone = SupConResNet(head=args.head, backbone=args.backbone)
         super(SCR, self).__init__(backbone, loss, args, transform)
