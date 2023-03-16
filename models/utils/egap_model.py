@@ -90,7 +90,7 @@ class EgapModel(ContinualModel):
         self.wb_log['egap'] = torch.argmax(gaps).item()
         self.wb_log['egap-k-1'] = gaps[n-1].item()
         self.wb_log['egap-k']   = gaps[n].item()
-        self.wb_log['egap-k+1'] = gaps[n+1].item()
+        # self.wb_log['egap-k+1'] = gaps[n+1].item()
         # log evals
         # decode: pickle.loads(codecs.decode(evals.encode(), "base64"))
         # self.wb_log['evals'] = codecs.encode(pickle.dumps(evals2.detach().cpu()), "base64").decode()

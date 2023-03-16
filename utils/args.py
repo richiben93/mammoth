@@ -44,7 +44,7 @@ def add_management_args(parser: ArgumentParser) -> None:
                         help='Enable csv logging')
     parser.add_argument('--wandb', action='store_true',
                         help='Enable wandb logging')
-    parser.add_argument('--wb_prj', type=str, default='rodo-super',
+    parser.add_argument('--wb_prj', type=str, default='casper-icml',
                         help='Wandb project')
     parser.add_argument('--wb_entity', type=str, default='regaz',
                         help='Watdb entity')
