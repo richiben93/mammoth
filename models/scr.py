@@ -56,7 +56,7 @@ class SCR(ContinualModel):
 
         self.denorm = self.dataset.get_denormalization_transform()
         # Instantiate buffers
-        self.buffer = Buffer(self.args.buffer_size, self.device)
+        self.buffer = Buffer(self.args.buffer_size, self.device, mode='balancoir')
         self.transform = nn.Sequential(
             RandomResizedCrop(size=(input_size_match[self.args.dataset][1], input_size_match[self.args.dataset][2]),
                               scale=(0.2, 1.)),
@@ -134,7 +134,10 @@ class SCR(ContinualModel):
             ).to(self.device)
             with bn_track_stats(self, False):
                 all_feats = self.net.features(x_buf).squeeze()
+                if x_buf.shape[0] == 1:
+                    all_feats = all_feats.unsqueeze(0)
                 all_feats = all_feats / all_feats.norm(dim=1, keepdim=True)
+
                 class_means.append(all_feats.mean(0).flatten())
-        self.class_means = torch.stack(class_means)
-        self.class_means = self.class_means / self.class_means.norm(dim=1, keepdim=True)
+            self.class_means = torch.stack(class_means)
+            self.class_means = self.class_means / self.class_means.norm(dim=1, keepdim=True)
