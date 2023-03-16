@@ -1,13 +1,14 @@
 from torch import nn
 from torch.functional import F
-from backbone.ResNet18 import lopeznet
+import backbone.ResNet18 as res18
 
 
 class SupConResNet(nn.Module):
     """backbone + projection head"""
-    def __init__(self, dim_in=160, head='mlp', feat_dim=128):
+    def __init__(self, dim_in=160, head='mlp', feat_dim=128, backbone='resnet18'):
         super(SupConResNet, self).__init__()
-        self.encoder = lopeznet(100)
+        self.encoder = getattr(res18, backbone)(100)
+        dim_in = self.encoder.nf * 8 * self.encoder.block.expansion
         if head == 'linear':
             self.head = nn.Linear(dim_in, feat_dim)
         elif head == 'mlp':
