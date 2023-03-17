@@ -4,16 +4,9 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
-from utils.buffer import Buffer
 from utils.args import *
 from torch.functional import F
-from models.utils.continual_model import ContinualModel
 from models.er_ace import ErACE
-from copy import deepcopy
-from utils.no_bn import bn_track_stats
-import os
-import pickle
-from models.icarl import baguette_fill_buffer
 from transformers import CLIPModel, CLIPTokenizer
 
 

@@ -11,7 +11,7 @@ class EgapModel(ContinualModel):
 
     @staticmethod
     def add_replay_args(parser):
-        parser.add_argument('--rep_minibatch', type=int, default=-1,
+        parser.add_argument('--rep_minibatch', type=int, default=None,
                             help='Size of pre-dataset minibatch replay (for x, lats and dists).')
         parser.add_argument('--replay_mode', type=str, required=True, help='What you replay.',
                             choices=['none', 'egap', 'egap2', 'egap2-1', 'egap2+1', 'egap3', 'egap2m',
@@ -27,6 +27,8 @@ class EgapModel(ContinualModel):
         return parser
 
     def __init__(self, backbone, loss, args, transform):
+        if args.rep_minibatch is None:
+            args.rep_minibatch = args.batch_size
         if args.rep_minibatch < 0:
             args.rep_minibatch = args.buffer_size
         if args.replay_mode == 'none' or args.replay_weight == 0:
