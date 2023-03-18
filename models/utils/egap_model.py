@@ -11,11 +11,11 @@ class EgapModel(ContinualModel):
 
     @staticmethod
     def add_replay_args(parser):
-        parser.add_argument('--rep_minibatch', type=int, default=-1,
+        parser.add_argument('--rep_minibatch', type=int, default=None,
                             help='Size of pre-dataset minibatch replay (for x, lats and dists).')
         parser.add_argument('--replay_mode', type=str, required=True, help='What you replay.',
                             choices=['none', 'egap', 'egap2', 'egap2-1', 'egap2+1', 'egap3', 'egap2m',
-                                     'egapB2', 'egapB2-1'])
+                                     'egapB2', 'egapB2-1', 'gkd'])
 
         parser.add_argument('--replay_weight', type=float, required=True, help='Weight of replay.')
 
@@ -27,6 +27,8 @@ class EgapModel(ContinualModel):
         return parser
 
     def __init__(self, backbone, loss, args, transform):
+        if args.rep_minibatch is None:
+            args.rep_minibatch = args.batch_size
         if args.rep_minibatch < 0:
             args.rep_minibatch = args.buffer_size
         if args.replay_mode == 'none' or args.replay_weight == 0:
@@ -34,8 +36,7 @@ class EgapModel(ContinualModel):
             args.replay_weight = 0
         super(EgapModel, self).__init__(backbone, loss, args, transform)
 
-        self.buffer = Buffer(self.args.buffer_size, self.device, mode='balancoir') \
-            if len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B' else Buffer(self.args.buffer_size, self.device)
+        self.buffer = Buffer(self.args.buffer_size, self.device, mode='balancoir')
 
         if len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B':
             self.nc = self.args.b_nclasses if self.args.b_nclasses is not None else self.N_CLASSES_PER_TASK
@@ -77,6 +78,10 @@ class EgapModel(ContinualModel):
         else:
             A, D, L = calc_ADL_knn(dists, k=self.args.knn_laplace, symmetric=True)
 
+        if self.args.replay_mode == 'gkd':
+            lab_mask = labels.unsqueeze(0) == labels.unsqueeze(1)
+            return A[~lab_mask].sum()
+
         L = torch.eye(A.shape[0], device=A.device) - normalize_A(A, D)
 
         n = self.nc if len(self.args.replay_mode) > 4 and self.args.replay_mode[4] == 'B' else self.N_CLASSES_PER_TASK * self.task
@@ -87,7 +92,7 @@ class EgapModel(ContinualModel):
         self.wb_log['egap'] = torch.argmax(gaps).item()
         self.wb_log['egap-k-1'] = gaps[n-1].item()
         self.wb_log['egap-k']   = gaps[n].item()
-        self.wb_log['egap-k+1'] = gaps[n+1].item()
+        # self.wb_log['egap-k+1'] = gaps[n+1].item()
         # log evals
         # decode: pickle.loads(codecs.decode(evals.encode(), "base64"))
         # self.wb_log['evals'] = codecs.encode(pickle.dumps(evals2.detach().cpu()), "base64").decode()

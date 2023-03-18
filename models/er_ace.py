@@ -4,13 +4,11 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
-import numpy as np
-import torch.nn.functional as F
 from utils.buffer import Buffer
 from utils.args import *
 from models.utils.continual_model import ContinualModel
-from datasets import get_dataset
-from utils.wandbsc import WandbLogger
+import os
+import pickle
 
 
 def get_parser() -> ArgumentParser:
@@ -30,6 +28,9 @@ class ErACE(ContinualModel):
         super(ErACE, self).__init__(backbone, loss, args, transform)
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.seen_so_far = torch.tensor([]).long().to(self.device)
+        if self.args.load_buffer is not None:
+            self.load_buffer(self.args.load_buffer)
+            self.seen_so_far = torch.cat([self.seen_so_far, self.buffer.labels.unique()]).unique()
 
     def observe(self, inputs, labels, not_aug_inputs):
         self.opt.zero_grad()
@@ -46,7 +47,7 @@ class ErACE(ContinualModel):
 
         loss = self.loss(logits, labels)
 
-        if self.task > 0:
+        if self.task > 0 and not self.buffer.is_empty():
             # sample from buffer
             buf_inputs, buf_labels = self.buffer.get_data(self.args.minibatch_size, transform=self.transform)
             loss_re = self.loss(self.net(buf_inputs), buf_labels)
@@ -59,3 +60,16 @@ class ErACE(ContinualModel):
         self.buffer.add_data(examples=not_aug_inputs, labels=labels)
 
         return loss.item()
+
+    def save_checkpoint(self):
+        log_dir = super().save_checkpoint()
+        ## pickle the future_buffer
+        with open(os.path.join(log_dir, f'task_{self.task}_buffer.pkl'), 'wb') as f:
+            self.buffer.to('cpu')
+            pickle.dump(self.buffer, f)
+            self.buffer.to(self.device)
+
+    def load_buffer(self, path):
+        with open(path, 'rb') as f:
+            self.buffer = pickle.load(f)
+            self.buffer.to(self.device)

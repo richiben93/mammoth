@@ -1,6 +1,6 @@
 import torch
 from utils.args import *
-from models.utils.cscct_model import CscCtModel
+from models.utils.casper_model import CasperModel
 
 
 def get_parser() -> ArgumentParser:
@@ -12,18 +12,18 @@ def get_parser() -> ArgumentParser:
     parser.add_argument('--grad_clip', default=0, type=float, help='Clip the gradient.')
     parser.add_argument('--erace_weight', type=float, default=1., help='Weight of erace.')
 
-    # --csc_weight 3, --ct_weight 1.5, --ct_temperature
-    CscCtModel.add_replay_args(parser)
+    # --replay_mode, --replay_weight, --rep_minibatch, --knn_laplace
+    CasperModel.add_replay_args(parser)
     
     return parser
 
 
-class ErACECscCt(CscCtModel):
-    NAME = 'er_ace_cscct'
+class ErACECasper(CasperModel):
+    NAME = 'er_ace_casper'
     COMPATIBILITY = ['class-il', 'domain-il', 'task-il', 'general-continual']
 
     def __init__(self, backbone, loss, args, transform):
-        super(ErACECscCt, self).__init__(backbone, loss, args, transform)
+        super(ErACECasper, self).__init__(backbone, loss, args, transform)
         self.seen_so_far = torch.tensor([], dtype=torch.long, device=self.device)
 
     def get_name(self):
@@ -52,13 +52,10 @@ class ErACECscCt(CscCtModel):
             self.wb_log['erace_loss'] = erace_loss.item()
             loss += erace_loss * self.args.erace_weight
 
-            if self.args.csc_weight > 0 and self.args.ct_weight > 0:
-                # concatenate stream with buf
-                full_inputs = torch.cat([inputs, buf_inputs], dim=0)
-                full_targets = torch.cat([labels, buf_labels], dim=0)
-                cscct_loss = self.get_cscct_loss(full_inputs, full_targets)
-                self.wb_log['cscct_loss'] = cscct_loss.item()
-                loss += cscct_loss
+            if self.args.rep_minibatch > 0 and self.args.replay_weight > 0:
+                replay_loss = self.get_replay_loss()
+                self.wb_log['egap_loss'] = replay_loss.item()
+                loss += replay_loss * self.args.replay_weight
 
         if self.args.buffer_size > 0:
             self.buffer.add_data(examples=not_aug_inputs, labels=labels)

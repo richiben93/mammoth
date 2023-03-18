@@ -2,7 +2,7 @@ import copy
 import os
 
 import torch
-from matplotlib import pyplot as plt
+# from matplotlib import pyplot as plt
 from torch import nn
 from torch.optim import SGD
 from torch.utils.data import DataLoader

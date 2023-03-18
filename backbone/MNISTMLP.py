@@ -6,7 +6,7 @@
 import torch
 import torch.nn as nn
 from backbone import xavier, num_flat_features
-
+import torch.nn.functional as F
 
 class MNISTMLP(nn.Module):
     """
@@ -53,14 +53,29 @@ class MNISTMLP(nn.Module):
         """
         self.net.apply(xavier)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward_all(self, inputs):
+        x = inputs.view(-1, num_flat_features(inputs))
+        x1_prerelu = self.fc1(x) 
+        x = F.relu(x1_prerelu)
+        x2_prerelu = self.fc2(x)
+        x = F.relu(x2_prerelu)
+        # x = self.classifier(x)
+        return {'attention': [x1_prerelu, x2_prerelu], 'features': x, 'raw_features': x2_prerelu}
+
+    def forward(self, x: torch.Tensor, returnt='res') -> torch.Tensor:
         """
         Compute a forward pass.
         :param x: input tensor (batch_size, input_size)
         :return: output tensor (output_size)
         """
         x = x.view(-1, num_flat_features(x))
-        return self.net(x)
+        x = self.fc1(x)
+        x = F.relu(x)
+        x = self.fc2(x)
+        x = F.relu(x)
+        if returnt == "both":
+            return self.classifier(x), x
+        return self.classifier(x)
 
     def get_params(self) -> torch.Tensor:
         """

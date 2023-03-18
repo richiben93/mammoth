@@ -5,24 +5,31 @@ import torch.nn.functional as F
 from datasets import get_dataset
 from utils.buffer import Buffer
 from utils.args import *
-from models.utils.continual_model import ContinualModel
 from utils.no_bn import bn_track_stats
 import numpy as np
+from models.utils.casper_model import CasperModel
 
 
 def get_parser() -> ArgumentParser:
     parser = ArgumentParser(description='Continual Learning via iCaRL.')
 
-    add_management_args(parser)
-    add_experiment_args(parser)
-    add_rehearsal_args(parser)
+    add_management_args(parser)     # --wandb, --custom_log, --save_checks
+    add_experiment_args(parser)     # --dataset, --model, --lr, --batch_size, --n_epochs
+    add_rehearsal_args(parser)      # --minibatch_size, --buffer_size
 
     parser.add_argument('--wd_reg', type=float, required=True,
                         help='L2 regularization applied to the parameters.')
+
+    # parser.add_argument('--grad_clip', default=0, type=float, help='Clip the gradient.')
+
+    # --replay_mode, --replay_weight, --rep_minibatch,
+    # --heat_kernel, --cos_dist, --knn_laplace
+    CasperModel.add_replay_args(parser)
+
     return parser
 
 
-def baguette_fill_buffer(self: ContinualModel, mem_buffer: Buffer, dataset, t_idx: int) -> None:
+def baguette_fill_buffer(self: CasperModel, mem_buffer: Buffer, dataset, t_idx: int) -> None:
     """
     Adds examples from the current task to the memory buffer
     by means of the herding strategy.
@@ -37,7 +44,7 @@ def baguette_fill_buffer(self: ContinualModel, mem_buffer: Buffer, dataset, t_id
 
     if t_idx > 0:
         # 1) First, subsample prior classes
-        buf_x, buf_y, buf_l = mem_buffer.get_all_data()
+        buf_x, buf_y, buf_l = self.buffer.get_all_data()
 
         mem_buffer.empty()
         for _y in buf_y.unique():
@@ -104,23 +111,24 @@ def baguette_fill_buffer(self: ContinualModel, mem_buffer: Buffer, dataset, t_id
     self.net.train(mode)
 
 
-class ICarl(ContinualModel):
-    NAME = 'icarl'
+class ICarlCasper(CasperModel):
+    NAME = 'icarl_casper'
     COMPATIBILITY = ['class-il', 'task-il']
 
     def __init__(self, backbone, loss, args, transform):
-        super(ICarl, self).__init__(backbone, loss, args, transform)
+        super(ICarlCasper, self).__init__(backbone, loss, args, transform)
         self.dataset = get_dataset(args)
 
         # Instantiate buffers
-        self.buffer = Buffer(self.args.buffer_size, self.device)
-        self.eye = torch.eye(self.dataset.N_CLASSES_PER_TASK *
-                             self.dataset.N_TASKS).to(self.device)
+        # self.buffer = Buffer(self.args.buffer_size, self.device)
+        self.eye = torch.eye(self.N_CLASSES_PER_TASK * self.N_TASKS, device=self.device)
 
         self.class_means = None
         self.old_net = None
-        self.current_task = 0
-        self.num_classes = self.dataset.N_CLASSES_PER_TASK * self.dataset.N_TASKS
+        self.num_classes = self.N_CLASSES_PER_TASK * self.N_TASKS
+
+    def get_name(self):
+        return 'ICarl' + self.get_name_extension()
 
     def forward(self, x):
         if self.class_means is None:
@@ -149,13 +157,20 @@ class ICarl(ContinualModel):
                 self.classes_so_far, labels.to('cpu'))).unique())
 
         self.class_means = None
-        if self.current_task > 0:
+        if self.task > 0:
             with torch.no_grad():
                 logits = torch.sigmoid(self.old_net(inputs))
         self.opt.zero_grad()
-        loss = self.get_loss(inputs, labels, self.current_task, logits)
-        loss.backward()
+        loss = self.get_loss(inputs, labels, self.task, logits)
+        self.wb_log['icarl_loss'] = loss.item()
 
+        if self.task > 0 and self.args.buffer_size > 0:
+            if self.args.rep_minibatch > 0 and self.args.replay_weight > 0:
+                replay_loss = self.get_replay_loss()
+                self.wb_log['egap_loss'] = replay_loss.item()
+                loss += replay_loss * self.args.replay_weight
+
+        loss.backward()
         self.opt.step()
 
         return loss.item()
@@ -174,8 +189,8 @@ class ICarl(ContinualModel):
         :return: the differentiable loss value
         """
         labels = labels.long()
-        pc = task_idx * self.dataset.N_CLASSES_PER_TASK
-        ac = (task_idx + 1) * self.dataset.N_CLASSES_PER_TASK
+        pc = task_idx * self.N_CLASSES_PER_TASK
+        ac = (task_idx + 1) * self.N_CLASSES_PER_TASK
 
         outputs = self.net(inputs)[:, :ac]
         if task_idx == 0:
@@ -202,7 +217,7 @@ class ICarl(ContinualModel):
         # denorm = dataset.get_denormalization_transform()
         # if denorm is None:
         #     denorm = lambda x: x
-        if self.current_task > 0:
+        if self.task > 0:
             dataset.train_loader.dataset.targets = np.concatenate(
                 [dataset.train_loader.dataset.targets,
                  self.buffer.labels.cpu().numpy()[:self.buffer.num_seen_examples]])
@@ -223,9 +238,9 @@ class ICarl(ContinualModel):
         self.old_net = deepcopy(self.net.eval())
         self.net.train()
         with torch.no_grad():
-            baguette_fill_buffer(self, self.buffer, dataset, self.current_task)
-        self.current_task += 1
+            baguette_fill_buffer(self, self.buffer, dataset, self.task)
         self.class_means = None
+        super().end_task(dataset)
 
     def compute_class_means(self) -> None:
         """

@@ -29,6 +29,8 @@ class ContinualModel(nn.Module):
         super(ContinualModel, self).__init__()
 
         self.net = backbone
+        if args.load_check is not None:
+            self.load_checkpoint(args.load_check)
         self.loss = loss
         self.args = args
         self.transform = transform
@@ -41,6 +43,10 @@ class ContinualModel(nn.Module):
         self.N_CLASSES_PER_TASK = dataset.N_CLASSES_PER_TASK
         self.dataset_name = dataset.NAME
         self.N_CLASSES = self.N_TASKS * self.N_CLASSES_PER_TASK
+        dataset.get_data_loaders()
+        self.class_names = []
+        if hasattr(dataset.train_loader.dataset, 'classes'):
+            self.class_names = dataset.train_loader.dataset.classes
 
         self.args.name = self.get_name()
         self.wblogger = WandbLogger(self.args, name=self.args.name, prj=self.args.wb_prj, entity=self.args.wb_entity)
@@ -87,6 +93,9 @@ class ContinualModel(nn.Module):
         torch.save(self.net.state_dict(), f'{log_dir}/task_{self.task}.pt')
         return log_dir
 
+    def load_checkpoint(self, path):
+        self.net.load_state_dict(torch.load(path))
+
     def save_logs(self):
         log_dir = os.path.join(base_path(), 'logs', self.dataset_name, self.args.name)
         # obj = {**vars(self.args), 'results': self.log_results}
@@ -100,8 +109,8 @@ class ContinualModel(nn.Module):
         return log_dir
 
     def reset_scheduler(self):
+        self.opt = SGD(self.net.parameters(), lr=self.args.lr, momentum=self.args.lr_momentum)
         if len(self.args.lr_decay_steps) > 0 and self.args.n_epochs > 1:
-            self.opt = SGD(self.net.parameters(), lr=self.args.lr, momentum=self.args.lr_momentum)
             self.scheduler = MultiStepLR(self.opt, milestones=self.args.lr_decay_steps, gamma=self.args.lr_decay)
 
     def scheduler_step(self):

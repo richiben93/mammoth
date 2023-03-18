@@ -13,7 +13,7 @@ from argparse import Namespace
 from models.utils.continual_model import ContinualModel
 from datasets.utils.continual_dataset import ContinualDataset
 from typing import Tuple
-from utils.metrics import forgetting
+from utils.metrics import forgetting, normgetting
 from datasets import get_dataset
 import sys
 
@@ -99,6 +99,8 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         for epoch in range(args.n_epochs):
             if model.NAME == 'joint':
                 break
+            if args.start_task > t:
+                break
             for i, data in enumerate(train_loader):
                 if hasattr(dataset.train_loader.dataset, 'logits'):
                     inputs, labels, not_aug_inputs, logits = data
@@ -119,6 +121,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
                 model.wb_log = {}
 
                 model_stash['batch_idx'] = i + 1
+
             model_stash['epoch_idx'] = epoch + 1
             model_stash['batch_idx'] = 0
             model.scheduler_step()
@@ -145,8 +148,8 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         }
         if t > 0:
             log_obj.update({
-                f'Class-IL forgetting': forgetting(results),
-                f'Task-IL forgetting': forgetting(results_mask_classes)
+                f'Class-IL forgetting': normgetting(results),
+                f'Task-IL forgetting': normgetting(results_mask_classes)
             })
         model.log_results.append(log_obj)
         model.wblogger({'testing': log_obj})
@@ -156,13 +159,15 @@ def train(model: ContinualModel, dataset: ContinualDataset,
             model.save_logs()
         model.wb_log = {}
 
-
         print_mean_accuracy(mean_acc, t + 1, dataset.SETTING)
 
         model_stash['mean_accs'].append(mean_acc)
         if args.csv_log:
             csv_logger.log(mean_acc)
             csv_logger.log_fullacc(accs)
+
+        if args.end_task is not None and t >= args.end_task:
+            break
 
     if args.csv_log:
         # csv_logger.add_bwt(results, results_mask_classes)
