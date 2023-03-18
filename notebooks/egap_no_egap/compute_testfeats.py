@@ -16,11 +16,11 @@ def bbasename(path):
 def find_args(foldername):
     api = wandb.Api(timeout=180)
     entity = 'regaz'
-    for project in ['rodo-istatsJIHAD', 'rodo-istats', 'rodo-istatsTEMP']:
+    for project in ['casper-icml', 'rodo-istatsJIHAD', 'rodo-istats', 'rodo-istatsTEMP']:
         for runna in api.runs(f'{entity}/{project}'):
             if runna.name == bbasename(foldername).split('_')[0]:
                 print('-- Run found!')
-                return runna.config['model'], runna.config['buffer_size'], 'egap' if 'egap' in runna.config['name'].lower() else 'none'
+                return runna.config['model'], runna.config['buffer_size'], 'egap' if ('egap' in runna.config['name'].lower() or 'casper' in runna.config['name'].lower()) else 'none'
     
     raise ValueError(f'Could not find run for {foldername}')
 
@@ -53,7 +53,7 @@ print('-- Loading Datasets')
 foldername = args.foldername
 args = Namespace(
             batch_size=64,
-            dataset='seq-cifar100_10x10',
+            dataset='seq-cifar100-10x10',
             validation=False,
 )
 dataset = SequentialCIFAR100_10x10(args)
@@ -74,6 +74,24 @@ if path[-1] != '/':
 print('-- Loading models')
 for id_task in range(1, 11):
     net = resnet18(100)
+    if model == 'scr_casper':
+        from models.scr_casper import SCRCasper
+        args.rep_minibatch = 64
+        args.replay_mode = 'none'
+        args.lr = 0.1
+        args.model = model
+        args.lr_momentum = 0
+        args.wandb = False
+        args.buffer_size= buf_size
+        args.scheduler= None
+        args.head='mlp'
+        args.b_nclasses=16
+        args.load_check=None
+        args.backbone='resnet18'
+        args.temp=0.1
+        args.wb_prj, args.wb_entity = 'regaz', 'rodo-istatsTEMP'
+        t_model = SCRCasper(net, lambda x:x, args, None)
+        net = t_model.net
     sd = torch.load(path + f'task_{id_task}.pt', map_location='cpu')
     net.load_state_dict(sd)
     net.eval()

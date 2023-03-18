@@ -21,7 +21,7 @@ def find_args(foldername):
     for runna in api.runs(f'{entity}/{project}'):
         if runna.name == bbasename(foldername).split('_')[0]:
             print('-- Run found!')
-            return runna.config['model'], runna.config['buffer_size'], 'egap' if 'egap' in runna.config['name'].lower() else 'none'
+            return runna.config['model'], runna.config['buffer_size'], 'egap' if ('egap' in runna.config['name'].lower() or 'casper' in runna.config['name'].lower()) else 'none'
     raise ValueError(f'Could not find run for {foldername}')
 
 args = ArgumentParser()

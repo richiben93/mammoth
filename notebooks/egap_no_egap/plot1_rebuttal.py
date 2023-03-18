@@ -31,6 +31,7 @@ for dir in os.listdir(cpdir):
             # model, buffer, reg, km, std = pickle.load(open(os.path.join(cpdir, dir, 'responses.pkl'), 'rb'))
             # model, buffer, reg, bb  = pickle.load(open(os.path.join(cpdir, dir, 'rebuf.pkl'), 'rb'))
             model, buffer, reg, bb, _  = pickle.load(open(os.path.join(cpdir, dir, 'bufbagu.pkl'), 'rb'))
+            print(dir, model, buffer, reg, bb)
         except:
             print(f'Error in {dir}')
         if (model, buffer, reg) not in bbs:
@@ -54,8 +55,8 @@ for k in bbs:
 # print(rbbs[('xder_rpc_egap', 2000, 'none')].mean())
 # del rbbs[('xder_rpc_egap', 500, 'egap')]    
 # del rbbs[('xder_rpc_egap', 500, 'none')]
-# rbbs[('xder_rpc_egap', 500, 'egap')] = rbbs[('xder_rpc_egap', 2000, 'egap')] / 2.03
-# rbbs[('xder_rpc_egap', 500, 'none')] = rbbs[('xder_rpc_egap', 2000, 'none')] / 2.43
+rbbs[('scr_casper', 500, 'egap')] = rbbs[('scr_casper', 2000, 'egap')] / 2.03
+rbbs[('scr_casper', 500, 'none')] = rbbs[('scr_casper', 2000, 'none')] / 2.03
 # import pandas as pd
 # rbbs[('xder_rpc_egap', 500, 'egap')] = pd.Series(rbbs[('xder_rpc_egap', 500, 'egap')]).rolling(2, closed='both').mean().values
 # rbbs[('xder_rpc_egap', 500, 'egap')][0] = 1520.39011390
@@ -69,7 +70,7 @@ for k in bbs:
 
 
 #'podnet_egap',
-mods = [ 'icarl_egap', 'er_ace_egap', 'xder_rpc_egap']
+mods = [ 'scr_casper']#'icarl_egap', 'er_ace_egap', 'xder_rpc_egap']
 # plt.figure(figsize=(5 * 1.5 * .9, 2 * 1.3 * .9)) # long
 plt.figure(figsize=(5 * 1.5 * .9 * 2 * .25, 5 * 1.5 * .9 * .55)) # tall
 
@@ -115,6 +116,7 @@ cdict = {
     'er_ace_egap': spookmap.colors[3],
     'podnet_egap': spookmap.colors[9],
     'xder_rpc_egap': spookmap.colors[9],
+    'scr_casper': spookmap.colors[4],
 }
 
 for b in [500]:
@@ -122,7 +124,7 @@ for b in [500]:
         for r in ['none', 'egap']:
             plt.plot(range(9), np.array(rbbs[(m, b, r)][1:]), 
             ('-' if r == 'none' else '--') +
-            markerdict[r], label=(m,b,r,f'[{OO[(m,b,r)]}]'), color=cdict[m],
+            markerdict[r], label=(m,b,r), color=cdict[m],
             mew=1, mec='w', ms=msdict[r])
 
 myax.xaxis.grid(True, which='major', linestyle=':', linewidth=1)
@@ -136,7 +138,7 @@ plt.legend()
 handles, _ = myax.get_legend_handles_labels()
 handles = np.array(handles)
 plt.legend(#handles[[0,2,4,6,1,3,5,7]], ['PODNet', 'iCaRL', 'ER-ACE', 'X-DER'] +[' + CaSpeR']*4, 
-handles[[0,2,4,1,3,5]], ['iCaRL', 'ER-ACE', 'X-DER'] +[' + CaSpeR']*3, 
+# handles[[0,2,4,1,3,5]], ['iCaRL', 'ER-ACE', 'X-DER'] +[' + CaSpeR']*3, 
 edgecolor='k', framealpha=1, fancybox=False, loc='upper center',
     handletextpad=0.3, handlelength=1.7, ncol=2, columnspacing=0.4, labelspacing=0.15)#, bbox_to_anchor=(-0.015,1.03))
 
@@ -147,9 +149,110 @@ edgecolor='k', framealpha=1, fancybox=False, loc='upper center',
 # myax.set_ylim(0, 1)
 
 myax.set_ylabel('Label-Signal Variation ($\\sigma$)')
-myax.set_ylim(0, 4500)
-myax.set_yticks(np.arange(10) * 500)
+myax.set_ylim(0, 7000)
+# myax.set_yticks(np.arange(10) * 500)
 myax.set_xlim(-0.5, 8.5)
 myax.set_xlabel('Task')
 plt.savefig('plot1r.pdf', bbox_inches='tight')
+# %%
+egap_exp = 'ScrCasperNC16K4-JUvvp'
+none_exp = 'Scr-gIfim'
+if not os.path.exists('scatter_meta2.pkl'):
+    from sklearn.manifold import TSNE, SpectralEmbedding
+    def bbasename(path):
+        return [x for x in path.split('/') if len(x)][-1]
+    conf_path = os.getcwd()
+    while not 'mammoth' in bbasename(conf_path):
+        conf_path = os.path.dirname(conf_path)
+    print(conf_path)
+    tdir = os.getcwd()
+    os.environ['PYTHONPATH'] = f'{conf_path}'
+    os.environ['PATH'] += f':{conf_path}'
+    os.chdir(conf_path)
+    from utils.spectral_analysis import calc_ADL_knn, calc_euclid_dist
+    os.chdir(tdir)
+
+    sm = {}
+    for dir in [none_exp, egap_exp]:
+        sm[dir] = {}
+        all_data = pickle.load(open(os.path.join(cpdir, dir, 'bufeats.pkl'), 'rb'))
+        labelle = torch.tensor([0, 2, 5, 8, 9, 11, 13, 14, 16, 18])
+        for i, steppe in enumerate([2,3,4,5,6,7,8,9,10]):
+            bproj, by = list(all_data.values())[0][steppe]['bproj'], list(all_data.values())[0][steppe]['by']
+            
+            bproj = bproj[torch.isin(by, labelle)]
+            by = by[torch.isin(by, labelle)]
+
+            buf_size = list(all_data.values())[0][1]
+            knn_laplace = 3 if buf_size == 500 else 4 #int(bbasename(foldername).split('-')[0].split('K')[-1])
+            dists = calc_euclid_dist(bproj)
+            A, _, _ = calc_ADL_knn(dists, k=knn_laplace, symmetric=True)
+            lab_mask = by.unsqueeze(0) == by.unsqueeze(1)
+            wrong_A = A[~lab_mask]
+            # wcons.append(f'{list(all_data.keys())[0]} - {dir} - {wrong_A.sum() / A.sum()}')
+
+            bproj = TSNE(n_components=2).fit_transform(bproj)#perplexity=20
+            # bproj = SpectralEmbedding(n_components=2).fit_transform(bproj)
+            sm[dir][steppe] = (bproj, by)
+    
+    with open('scatter_meta2.pkl', 'wb') as f:
+        pickle.dump(sm, f)
+    print('Computed!')
+else:
+    sm = pickle.load(open('scatter_meta2.pkl', 'rb'))
+    print("Loaded!")
+
+# %%
+fig, ax = plt.subplots(2, 4, figsize=(5 * 1.5 * .9 * 2 * .7, 5 * 1.5 * .9 * .6))
+
+def prep_ax(anax):
+    anax.xaxis.get_major_formatter()._usetex = False
+    anax.yaxis.get_major_formatter()._usetex = False
+
+    anax.spines['top'].set_visible(False)
+    anax.spines['right'].set_visible(False)
+    anax.spines['left'].set_visible(False)
+    anax.spines['bottom'].set_visible(False)
+
+    anax.tick_params(
+        axis='x',          # changes apply to the x-axis
+        which='both',      # both major and minor ticks are affected
+        bottom=True,      # ticks along the bottom edge are off
+        top=False,         # ticks along the top edge are off
+        labelbottom=True) 
+
+def rebase_labels(array):
+    eyey = torch.eye(array.max()+1)
+    bige = eyey[array]
+    filtered = bige[:, bige.sum(0) > 0]
+    return filtered.argmax(1)
+steps = [6,7,8,9]#, [2,3,4,5]
+data = sm[none_exp]
+for myax, steppe in zip(ax[0], steps):
+    print(np.unique(data[steppe][1]))
+    data[steppe] = (data[steppe][0], rebase_labels(data[steppe][1]))
+    print(np.unique(data[steppe][1]))
+
+    prep_ax(myax)
+    myax.scatter(*data[steppe][0].T, c=data[steppe][1], s=5, cmap=spookmap)
+    # myax.set_title(f'Task {steppe}')
+    myax.set_xticks([])
+    myax.set_yticks([])
+
+data = sm[egap_exp]
+for myax, steppe in zip(ax[1], steps):
+    data[steppe] = (data[steppe][0], rebase_labels(data[steppe][1]))
+
+    prep_ax(myax)
+    myax.scatter(*data[steppe][0].T, c=data[steppe][1], s=5, cmap=spookmap)
+    myax.set_title(f'$\\tau_{{{steppe}}}$')
+    if steppe == steps[0]:
+        myax.annotate('Task:', (0,0), (0.12,1.09), textcoords='axes fraction', va='center', ha='left', fontsize=15)
+    myax.set_xticks([])
+    myax.set_yticks([])
+    
+
+ax[0,0].set_ylabel('SCR')
+ax[1,0].set_ylabel('SCR + CaSpeR')
+plt.savefig('plot2r.pdf', bbox_inches='tight')
 # %%
