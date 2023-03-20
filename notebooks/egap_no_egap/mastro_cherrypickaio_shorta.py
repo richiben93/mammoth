@@ -25,7 +25,12 @@ os.chdir(tdir)
 
 homedir = '/home/mbosc/phd/bertodomammoth/rodomammoth/data/more_checkpoints/seq-cifar100-10x10/'
 
-dirs = [x for x in os.listdir(homedir)]
+# dirs = [x for x in os.listdir(homedir)]
+dirs = [
+"ScrCasperNC16K4-LIMni",
+"ScrCasperNC16K4-ufR3t",
+"ScrCasperNC16K4-0bnub",
+]
 # dirs = ['../sacred_cps/' + x for x in dirs]
 
 plt.ioff()
@@ -44,8 +49,7 @@ for dir in tqdm(dirs):#os.listdir(homedir)):
         fig, ax = plt.subplots(2, 5, figsize=(20, 8))
         ax = ax.flatten()
         for i, steppe in enumerate(list(all_data.values())[0]):
-            bproj, by = list(all_data.values())[0][steppe]['bproj'], list(all_data.values())[0][steppe]['by']
-            
+            bproj, by = list(all_data.values())[0][steppe]['bproj'], list(all_data.values())[0][steppe]['by']    
             bproj = bproj[torch.isin(by, labelle)]
             by = by[torch.isin(by, labelle)]
 

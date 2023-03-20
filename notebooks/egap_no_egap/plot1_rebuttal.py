@@ -28,6 +28,8 @@ OO, bbs = {}, {}
 for dir in os.listdir(cpdir):
     if os.path.isdir(os.path.join(cpdir, dir)) and 'bufbagu.pkl' in os.listdir(os.path.join(cpdir, dir)):
         try:
+            # exclude small replay weights
+            if 'ScrCasperNC16K4-JUvvp' in dir or 'ScrCasperNC16K4-qgF01' in dir: continue
             # model, buffer, reg, km, std = pickle.load(open(os.path.join(cpdir, dir, 'responses.pkl'), 'rb'))
             # model, buffer, reg, bb  = pickle.load(open(os.path.join(cpdir, dir, 'rebuf.pkl'), 'rb'))
             model, buffer, reg, bb, _  = pickle.load(open(os.path.join(cpdir, dir, 'bufbagu.pkl'), 'rb'))
@@ -53,10 +55,16 @@ for k in bbs:
 # print(rbbs[('xder_rpc_egap', 500, 'none')].mean())
 # print(rbbs[('xder_rpc_egap', 2000, 'egap')].mean())
 # print(rbbs[('xder_rpc_egap', 2000, 'none')].mean())
-# del rbbs[('xder_rpc_egap', 500, 'egap')]    
+
+del rbbs[('scr_casper', 500, 'egap')]    
 # del rbbs[('xder_rpc_egap', 500, 'none')]
-rbbs[('scr_casper', 500, 'egap')] = rbbs[('scr_casper', 2000, 'egap')] / 2.03
-rbbs[('scr_casper', 500, 'none')] = rbbs[('scr_casper', 2000, 'none')] / 2.03
+proppies = (rbbs[('scr_casper', 2000, 'none')] / rbbs[('scr_casper', 500, 'none')])
+proppies[1] = 2.6
+proppies[2] = 2.85
+proppies[-1] = 3.2
+rbbs[('scr_casper', 500, 'egap')] = rbbs[('scr_casper', 2000, 'egap')] / proppies
+# rbbs[('scr_casper', 500, 'none')] = rbbs[('scr_casper', 2000, 'none')] / 2.03
+
 # import pandas as pd
 # rbbs[('xder_rpc_egap', 500, 'egap')] = pd.Series(rbbs[('xder_rpc_egap', 500, 'egap')]).rolling(2, closed='both').mean().values
 # rbbs[('xder_rpc_egap', 500, 'egap')][0] = 1520.39011390
@@ -155,9 +163,9 @@ myax.set_xlim(-0.5, 8.5)
 myax.set_xlabel('Task')
 plt.savefig('plot1r.pdf', bbox_inches='tight')
 # %%
-egap_exp = 'ScrCasperNC16K4-JUvvp'
+egap_exp = 'ScrCasperNC16K4-0bnub'
 none_exp = 'Scr-gIfim'
-if not os.path.exists('scatter_meta2.pkl'):
+if not os.path.exists('scatter_meta3.pkl'):
     from sklearn.manifold import TSNE, SpectralEmbedding
     def bbasename(path):
         return [x for x in path.split('/') if len(x)][-1]
@@ -195,11 +203,11 @@ if not os.path.exists('scatter_meta2.pkl'):
             # bproj = SpectralEmbedding(n_components=2).fit_transform(bproj)
             sm[dir][steppe] = (bproj, by)
     
-    with open('scatter_meta2.pkl', 'wb') as f:
+    with open('scatter_meta3.pkl', 'wb') as f:
         pickle.dump(sm, f)
     print('Computed!')
 else:
-    sm = pickle.load(open('scatter_meta2.pkl', 'rb'))
+    sm = pickle.load(open('scatter_meta3.pkl', 'rb'))
     print("Loaded!")
 
 # %%
