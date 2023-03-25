@@ -36,6 +36,7 @@ def get_parser() -> ArgumentParser:
                         help='Penalty weight.')
     parser.add_argument('--supcon_weight', type=float, required=True,
                         help='Penalty weight.')
+    parser.add_argument('--trans_twice', type=int, default=0)
     
     return parser
 
@@ -97,6 +98,8 @@ class SCRDerpp(ContinualModel):
             buf_inputs, buf_labels, _ = self.buffer.get_data(
                 self.args.minibatch_size)
             transformed_inputs = self.transform_scr(buf_inputs)
+            if self.args.trans_twice:
+                buf_inputs = self.transform_scr(buf_inputs)
             pred = torch.cat([self.net.forward_scr(buf_inputs).unsqueeze(1),
                               self.net.forward_scr(transformed_inputs).unsqueeze(1)],
                              dim=1)
@@ -116,10 +119,10 @@ class SCRDerpp(ContinualModel):
             derpp_loss += self.args.beta * self.loss(buf_outputs, buf_labels)
             self.wb_log['derpp_loss'] = derpp_loss.item()
             loss += derpp_loss
-            loss.backward()
-
-            self.opt.step()
-            loss = loss.item()
+        
+        loss.backward()
+        self.opt.step()
+        loss = loss.item()
 
         if self.args.buffer_size > 0:
             self.buffer.add_data(examples=not_aug_inputs,

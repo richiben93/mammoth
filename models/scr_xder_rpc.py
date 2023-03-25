@@ -41,6 +41,7 @@ def get_parser() -> ArgumentParser:
                                                                                              'efficientnet'])
     parser.add_argument('--supcon_weight', type=float, required=True,
                         help='Penalty weight.')
+    parser.add_argument('--trans_twice', type=int, default=0)
     return parser
 
 
@@ -321,6 +322,8 @@ class SCRXDerRPC(ContinualModel):
             buf_inputs, buf_labels, _, _ = self.buffer.get_data(
                 self.args.minibatch_size)
             transformed_inputs = self.transform_scr(buf_inputs)
+            if self.args.trans_twice:
+                buf_inputs = self.transform_scr(buf_inputs)
             pred = torch.cat([self.net.forward_scr(buf_inputs).unsqueeze(1),
                               self.net.forward_scr(transformed_inputs).unsqueeze(1)],
                              dim=1)
