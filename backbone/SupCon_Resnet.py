@@ -33,13 +33,16 @@ class SupConResNet(nn.Module):
             raise NotImplementedError(
                 'head not supported: {}'.format(head))
 
-    def forward(self, x):
+    def forward_scr(self, x):
         feat = self.encoder.features(x)
         if self.head:
             feat = F.normalize(self.head(feat), dim=1)
         else:
             feat = F.normalize(feat, dim=1)
         return feat
+
+    def forward(self, x):
+        return self.encoder(x)
 
     def features(self, x):
         return self.encoder.features(x)
