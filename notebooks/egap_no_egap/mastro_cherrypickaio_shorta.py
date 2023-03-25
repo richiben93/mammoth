@@ -23,13 +23,15 @@ os.chdir(conf_path)
 from utils.spectral_analysis import calc_ADL_knn, calc_euclid_dist
 os.chdir(tdir)
 
-homedir = '/home/mbosc/phd/bertodomammoth/rodomammoth/data/more_checkpoints/seq-cifar100-10x10/'
+# homedir = '/home/mbosc/phd/bertodomammoth/rodomammoth/data/more_checkpoints/seq-cifar100-10x10/'
+homedir = '/home/mbosc/phd/bertodomammoth/rodomammoth/data/postreb_checkpoints/'
 
 # dirs = [x for x in os.listdir(homedir)]
 dirs = [
-"ScrCasperNC16K4-LIMni",
-"ScrCasperNC16K4-ufR3t",
-"ScrCasperNC16K4-0bnub",
+# "ScrCasperNC16K4-LIMni",
+# "ScrCasperNC16K4-ufR3t",
+# "ScrCasperNC16K4-0bnub",
+"Scr-meybS"
 ]
 # dirs = ['../sacred_cps/' + x for x in dirs]
 

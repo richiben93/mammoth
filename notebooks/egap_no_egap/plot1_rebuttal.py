@@ -163,9 +163,10 @@ myax.set_xlim(-0.5, 8.5)
 myax.set_xlabel('Task')
 plt.savefig('plot1r.pdf', bbox_inches='tight')
 # %%
-egap_exp = 'ScrCasperNC16K4-0bnub'
-none_exp = 'Scr-gIfim'
-if not os.path.exists('scatter_meta3.pkl'):
+egap_exp = 'Scr-meybS' #'ScrCasperNC16K4-0bnub'
+none_exp = 'Scr-meybS' #'Scr-gIfim'
+cpdir = '/home/mbosc/phd/bertodomammoth/rodomammoth/data/postreb_checkpoints/'
+if not os.path.exists('scatter_meta4.pkl'):
     from sklearn.manifold import TSNE, SpectralEmbedding
     def bbasename(path):
         return [x for x in path.split('/') if len(x)][-1]
@@ -203,11 +204,11 @@ if not os.path.exists('scatter_meta3.pkl'):
             # bproj = SpectralEmbedding(n_components=2).fit_transform(bproj)
             sm[dir][steppe] = (bproj, by)
     
-    with open('scatter_meta3.pkl', 'wb') as f:
+    with open('scatter_meta4.pkl', 'wb') as f:
         pickle.dump(sm, f)
     print('Computed!')
 else:
-    sm = pickle.load(open('scatter_meta3.pkl', 'rb'))
+    sm = pickle.load(open('scatter_meta4.pkl', 'rb'))
     print("Loaded!")
 
 # %%
