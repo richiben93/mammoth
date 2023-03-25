@@ -129,5 +129,6 @@ class SCRDerpp(ContinualModel):
         return loss
 
     def end_task(self, dataset) -> None:
+        super().end_task(dataset)
         self.current_task += 1
         self.class_means = None

@@ -132,7 +132,7 @@ class SCRXDerRPC(ContinualModel):
         return x
 
     def end_task(self, dataset):
-
+        super().end_task(dataset)
         tng = self.training
         self.train()
 
