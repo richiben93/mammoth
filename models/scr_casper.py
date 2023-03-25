@@ -108,7 +108,8 @@ class SCRCasper(CasperModel):
             comb_inputs = torch.cat((not_aug_inputs, buf_inputs))
             comb_transformed_inputs = self.transform(comb_inputs)
             comb_labels = torch.cat((labels, buf_labels))
-            pred = torch.cat([self.net(comb_inputs).unsqueeze(1), self.net(comb_transformed_inputs).unsqueeze(1)],
+            pred = torch.cat([self.net.forward_scr(comb_inputs).unsqueeze(1),
+                              self.net.forward_scr(comb_transformed_inputs).unsqueeze(1)],
                              dim=1)
             loss = self.loss(pred, comb_labels)
             self.wb_log['scr_loss'] = loss.item()
