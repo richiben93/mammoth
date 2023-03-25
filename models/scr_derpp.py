@@ -34,6 +34,9 @@ def get_parser() -> ArgumentParser:
                         help='Penalty weight.')
     parser.add_argument('--beta', type=float, required=True,
                         help='Penalty weight.')
+    parser.add_argument('--supcon_weight', type=float, required=True,
+                        help='Penalty weight.')
+    
     return parser
 
 
@@ -99,7 +102,7 @@ class SCRDerpp(ContinualModel):
                              dim=1)
             supconloss = self.supconloss(pred, buf_labels)
             self.wb_log['supcon_loss'] = supconloss.item()
-            loss += supconloss
+            loss += supconloss * self.args.supcon_weight
 
             # derpp loss
             buf_inputs, _, buf_logits = self.buffer.get_data(

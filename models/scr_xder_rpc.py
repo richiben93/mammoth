@@ -32,14 +32,15 @@ def get_parser() -> ArgumentParser:
     parser.add_argument('--beta', type=float, required=True, help='Penalty weight.')
 
     parser.add_argument('--gamma', type=float, default=0.85)
-    parser.add_argument('--eta', type=float, default=0.1)
+    parser.add_argument('--eta', type=float, default=0.001)
     parser.add_argument('--m', type=float, default=0.3)
     parser.add_argument('--temp', type=float, required=True,
                         help='Temperature for loss.')
     parser.add_argument('--head', type=str, required=False, default='mlp')
     parser.add_argument('--backbone', type=str, required=False, default='resnet18', choices=['resnet18', 'lopeznet',
                                                                                              'efficientnet'])
-
+    parser.add_argument('--supcon_weight', type=float, required=True,
+                        help='Penalty weight.')
     return parser
 
 
@@ -324,7 +325,7 @@ class SCRXDerRPC(ContinualModel):
             pred = torch.cat([self.net.forward_scr(buf_inputs).unsqueeze(1),
                               self.net.forward_scr(transformed_inputs).unsqueeze(1)],
                              dim=1)
-            supconloss = self.supconloss(pred, buf_labels)
+            supconloss = self.supconloss(pred, buf_labels) * self.args.supcon_weight
             self.wb_log['supcon_loss'] = supconloss.item()
 
         loss = loss_stream + loss_der + loss_derpp + loss_constr_futu + loss_constr_past + supconloss
