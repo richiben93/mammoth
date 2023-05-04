@@ -1,0 +1,15 @@
+[ ] VERIFICARE SE IL LATENT SPACE DEI CHECKPOINT 9575895 (replay weight non banale) E' UN PO' MIGLIORE PER CASPER
+        compute_testfeats --> mastro_cherrypickaio_shorta
+        se migliora vuol dire che il contrastive non separa un cazzo e che casper lo corregge, buono
+[ ] VERIFICARE IL SIGMA EFFETTIVO DEI MODELLI DI CASPER CON REPLAY-SIZE 500
+        compute_bufBaguette --> plot1_rebuttal.py 
+        mi aspetto sia simile a quello misurato (lo è e sembra indicare poco beneficio di casper)
+        [OCCHIO] se il latent space migliora per il modello con casper piu' alto bisogna rifare il sigma usando lui (con il fattore di correzione buffer 2000 -> 500)
+
+[ ] AGGIORNARE NUMERI DI SCR IN RISPOSTA REV 1
+    numeri con casper non trascurabile --> 30.00, 43.85
+[ ] VERIFICARE LA RISPOSTA DI REV 2 IN CUI ESCE SCR
+
+
+come la spiego:
+    - l'obiettivo contrastive incoraggia meno della crossentropy la clusterizzazione del latent space e antagonizza parzialmente CaSpeR: capire come mai.

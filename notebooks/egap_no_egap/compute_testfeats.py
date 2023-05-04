@@ -18,7 +18,7 @@ def find_args(foldername):
     entity = 'regaz'
     for project in ['casper-icml', 'rodo-istatsJIHAD', 'rodo-istats', 'rodo-istatsTEMP']:
         for runna in api.runs(f'{entity}/{project}'):
-            if runna.name == bbasename(foldername).split('_')[0]:
+            if runna.name == bbasename(foldername):#.split('_')[0]:
                 print('-- Run found!')
                 return runna.config['model'], runna.config['buffer_size'], 'egap' if ('egap' in runna.config['name'].lower() or 'casper' in runna.config['name'].lower()) else 'none'
     
@@ -91,6 +91,25 @@ for id_task in range(1, 11):
         args.temp=0.1
         args.wb_prj, args.wb_entity = 'regaz', 'rodo-istatsTEMP'
         t_model = SCRCasper(net, lambda x:x, args, None)
+        net = t_model.net
+    if model in ['scr_derpp', 'scr_xder_rpc']:
+        from models.scr_derpp import SCRDerpp
+        args.rep_minibatch = 64
+        args.replay_mode = 'none'
+        args.lr = 0.1
+        args.model = model
+        args.lr_momentum = 0
+        args.wandb = False
+        args.buffer_size= buf_size
+        args.scheduler= None
+        args.head='mlp'
+        args.load_check=None
+        args.backbone='resnet18'
+        args.temp=0.1
+        args.wb_prj, args.wb_entity = 'regaz', 'rodo-istatsTEMP'
+        args.alpha = 0.1
+        args.beta = 0.1
+        t_model = SCRDerpp(net, lambda x:x, args, None)
         net = t_model.net
     sd = torch.load(path + f'task_{id_task}.pt', map_location='cpu')
     net.load_state_dict(sd)

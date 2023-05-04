@@ -72,7 +72,7 @@ rbbs[('xder_rpc_egap', 500, 'none')][1] = 1513.439150
 #'podnet_egap',
 mods = [ 'icarl_egap', 'er_ace_egap', 'xder_rpc_egap']
 # plt.figure(figsize=(5 * 1.5 * .9, 2 * 1.3 * .9)) # long
-plt.figure(figsize=(5 * 1.5 * .9 * 2 * .25, 5 * 1.5 * .9 * .55)) # tall
+plt.figure(figsize=(5 * 1.5 * .9 * 2 * .25, 5 * 1.5 * .9 * .55 * 2 / 3)) # tall
 
 # ----------------------------- MAGIC PLOTMAGIC -----------------------------
 myax = plt.gca()
@@ -147,9 +147,10 @@ edgecolor='k', framealpha=1, fancybox=False, loc='upper center',
 # myax.set_yticklabels(['0', '.1', '.2', '.3', '.4', '.5', '.6', '.7', '.8', '.9', '1'])
 # myax.set_ylim(0, 1)
 
-myax.set_ylabel('Label-Signal Variation ($\\sigma$)')
-myax.set_ylim(0, 4500)
-myax.set_yticks(np.arange(10) * 500)
+myax.set_ylabel('Lab.-Sig.\\ Var.\\ ($\\sigma$) $\\times 10^3$')
+myax.set_ylim(0, 3100)
+myax.set_yticks(np.arange(7) * 500)
+myax.set_yticklabels([f'{x/1000:.1f}' for x in np.arange(7) * 500])
 myax.set_xlim(-0.5, 8.5)
 myax.set_xlabel('Task')
 plt.savefig('plot1.pdf', bbox_inches='tight')

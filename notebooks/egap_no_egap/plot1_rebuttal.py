@@ -163,8 +163,8 @@ myax.set_xlim(-0.5, 8.5)
 myax.set_xlabel('Task')
 plt.savefig('plot1r.pdf', bbox_inches='tight')
 # %%
-egap_exp = 'Scr-meybS' #'ScrCasperNC16K4-0bnub'
-none_exp = 'Scr-meybS' #'Scr-gIfim'
+egap_exp = 'ScrCasperNC16K4-0bnub' #'ScrCasperNC16K4-0bnub'
+none_exp = 'Scr_xder_rpc-OLtCA' #'Scr-gIfim'
 cpdir = '/home/mbosc/phd/bertodomammoth/rodomammoth/data/postreb_checkpoints/'
 if not os.path.exists('scatter_meta4.pkl'):
     from sklearn.manifold import TSNE, SpectralEmbedding

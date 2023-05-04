@@ -31,7 +31,8 @@ dirs = [
 # "ScrCasperNC16K4-LIMni",
 # "ScrCasperNC16K4-ufR3t",
 # "ScrCasperNC16K4-0bnub",
-"Scr-meybS"
+# "Scr-meybS"
+"Scr_xder_rpc-OLtCA"
 ]
 # dirs = ['../sacred_cps/' + x for x in dirs]
 
