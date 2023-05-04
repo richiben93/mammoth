@@ -15,7 +15,7 @@ def bbasename(path):
 
 def find_args(foldername):
     api = wandb.Api(timeout=180)
-    entity, project = 'regaz', 'rodo-istatsTEMP'
+    entity, project = 'regaz', 'rodo-istatsTEST'
     for runna in api.runs(f'{entity}/{project}'):
         if runna.name == bbasename(foldername).split('_')[0]:
             print('-- Run found!')
@@ -43,7 +43,7 @@ device = get_device()
 from datasets.seq_cifar100 import SequentialCIFAR100_10x10
 print('-- Searching run', args.foldername)
 model, buf_size, reg = find_args(args.foldername)
-if os.path.exists(os.path.join(args.foldername, 'rebuf.pkl')):
+if os.path.exists(os.path.join(args.foldername, 'resubtest.pkl')):
     print("-- ALREADY DONE, ABORTING\n")
     exit()
 
@@ -51,7 +51,7 @@ print('-- Loading Datasets')
 foldername = args.foldername
 args = Namespace(
             batch_size=64,
-            dataset='seq-cifar100-10x10',
+            dataset='seq-cifar100_10x10',
             validation=False,
 )
 dataset = SequentialCIFAR100_10x10(args)
@@ -72,24 +72,6 @@ if path[-1] != '/':
 print('-- Loading models')
 for id_task in range(1, 11):
     net = resnet18(100)
-    if model == 'podnet_egap':
-        from models.podnet_egap import PodNetEgap
-        args.rep_minibatch = 64
-        args.replay_mode = 'none'
-        args.lr = 0.1
-        args.model = model
-        args.lr_momentum = 0
-        args.wandb = False
-        args.buffer_size= buf_size
-        args.scheduler= None
-        args.k=10
-        args.scaling=3
-        args.eta =1
-        args.delta=0.6
-        args.wb_prj, args.wb_entity = 'regaz', 'rodo-istatsTEMP'
-        t_model = PodNetEgap(net, lambda x: x, args, None)
-        net = t_model.net
-        
     sd = torch.load(path + f'task_{id_task}.pt', map_location='cpu')
     net.load_state_dict(sd)
     net.eval()
@@ -101,32 +83,40 @@ for id_task in range(1, 11):
 
 print('-- Computing projections')
 for id_task in tqdm(range(1, 11)):
-    
-    
     net = all_data[(model, reg, buf_size)][id_task]['net']
     all_data[(model, reg, buf_size)][id_task]['projs'] = []
-    all_data[(model, reg, buf_size)][id_task]['preds'] = []
     all_data[(model, reg, buf_size)][id_task]['labs'] = []
     net.to(device)    
 
-    buf = all_data[(model, reg, buf_size)][id_task]['buf']
-    bufdata = buf.get_data(buf.buffer_size, transform=dataset.test_loaders[0].dataset.transform.transforms[1])
-    bx, by = bufdata[0], bufdata[1]
-    bx = bx.to(device)
-    by = by
-    bproj = net.features(bx).cpu()
-    all_data[(model, reg, buf_size)][id_task][f'bproj'] = bproj
-    all_data[(model, reg, buf_size)][id_task][f'by'] = by
-    
+    for j, dl in enumerate(dataset.test_loaders[:id_task]):
+        corr, corrknn, tot = 0, 0, 0
+        for x, y in dl:
+
+            x = x.to(device)
+            y = y
+            proj = net.features(x).cpu()
+            tot += len(y)
+            
+            all_data[(model, reg, buf_size)][id_task]['projs'].append(proj)
+            all_data[(model, reg, buf_size)][id_task]['labs'].append(y)
+            if tot > 200:
+                break
+            
     net.to('cpu')
+    
+    all_data[(model, reg, buf_size)][id_task]['projs'] = torch.cat(all_data[(model, reg, buf_size)][id_task]['projs'], dim=0)
+    all_data[(model, reg, buf_size)][id_task]['labs'] = torch.cat(all_data[(model, reg, buf_size)][id_task]['labs'], dim=0)
+    rando = torch.randperm(len(all_data[(model, reg, buf_size)][id_task]['projs']))
+    all_data[(model, reg, buf_size)][id_task]['projs'] = all_data[(model, reg, buf_size)][id_task]['projs'][rando[:2000]]
+    all_data[(model, reg, buf_size)][id_task]['labs'] = all_data[(model, reg, buf_size)][id_task]['labs'][rando[:2000]]
 
 # knn
 print('-- Computing bbs')
 from utils.spectral_analysis import calc_cos_dist, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs, calc_ADL_heat
 wrong_cons = []
 for id_task in tqdm(range(1, 11)):
-    features = all_data[(model, reg, buf_size)][id_task]['bproj']
-    labels = all_data[(model, reg, buf_size)][id_task]['by']
+    features = all_data[(model, reg, buf_size)][id_task]['projs']
+    labels = all_data[(model, reg, buf_size)][id_task]['labs']
     
     knn_laplace = 5 if buf_size == 500 else 4 #int(bbasename(foldername).split('-')[0].split('K')[-1])
     dists = calc_euclid_dist(features)
@@ -135,6 +125,14 @@ for id_task in tqdm(range(1, 11)):
     wrong_A = A[~lab_mask]
     wrong_cons.append(wrong_A.sum() / A.sum())
 
-print('-- Saving to', os.path.join(foldername, 'rebuf.pkl'), '\n')
-with open(os.path.join(foldername, 'rebuf.pkl'), 'wb') as f:
+print('-- Saving to', os.path.join(foldername, 'resubtest.pkl'), '\n')
+with open(os.path.join(foldername, 'resubtest.pkl'), 'wb') as f:
     pickle.dump((model, buf_size, reg, wrong_cons), f)
+
+for id_task in tqdm(range(1, 11)):
+    del all_data[(model, reg, buf_size)][id_task]['net']
+    del all_data[(model, reg, buf_size)][id_task]['buf']
+
+print('-- Saving to', os.path.join(foldername, 'resubtestfeats.pkl'), '\n')
+with open(os.path.join(foldername, 'resubtestfeats.pkl'), 'wb') as f:
+    pickle.dump(all_data, f)

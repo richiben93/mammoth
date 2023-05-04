@@ -1,3 +1,5 @@
+## COMPUTES THE BUFFER MEASURE FROM  lassance et al., 2021
+
 from re import sub
 import torch
 import numpy as np
@@ -15,11 +17,11 @@ def bbasename(path):
 
 def find_args(foldername):
     api = wandb.Api(timeout=180)
-    entity, project = 'regaz', 'rodo-istatsTEMP'
+    entity, project = 'regaz', 'casper-icml'# 'rodo-istatsTEMP'
     for runna in api.runs(f'{entity}/{project}'):
         if runna.name == bbasename(foldername).split('_')[0]:
             print('-- Run found!')
-            return runna.config['model'], runna.config['buffer_size'], 'egap' if 'egap' in runna.config['name'].lower() else 'none'
+            return runna.config['model'], runna.config['buffer_size'], 'egap' if ('egap' in runna.config['name'].lower() or 'casper' in runna.config['name'].lower()) else 'none'
     raise ValueError(f'Could not find run for {foldername}')
 
 args = ArgumentParser()
@@ -43,7 +45,7 @@ device = get_device()
 from datasets.seq_cifar100 import SequentialCIFAR100_10x10
 print('-- Searching run', args.foldername)
 model, buf_size, reg = find_args(args.foldername)
-if os.path.exists(os.path.join(args.foldername, 'rebuf.pkl')):
+if os.path.exists(os.path.join(args.foldername, 'bufbagu.pkl')):
     print("-- ALREADY DONE, ABORTING\n")
     exit()
 
@@ -89,8 +91,27 @@ for id_task in range(1, 11):
         args.wb_prj, args.wb_entity = 'regaz', 'rodo-istatsTEMP'
         t_model = PodNetEgap(net, lambda x: x, args, None)
         net = t_model.net
+    elif model == 'scr_casper':
+        from models.scr_casper import SCRCasper
+        args.rep_minibatch = 64
+        args.replay_mode = 'none'
+        args.lr = 0.1
+        args.model = model
+        args.lr_momentum = 0
+        args.wandb = False
+        args.buffer_size= buf_size
+        args.scheduler= None
+        args.head='mlp'
+        args.b_nclasses=16
+        args.load_check=None
+        args.backbone='resnet18'
+        args.temp=0.1
+        args.wb_prj, args.wb_entity = 'regaz', 'rodo-istatsTEMP'
+        t_model = SCRCasper(net, lambda x:x, args, None)
+        net = t_model.net
         
     sd = torch.load(path + f'task_{id_task}.pt', map_location='cpu')
+
     net.load_state_dict(sd)
     net.eval()
     buf = pickle.load(open(path + f'task_{id_task}_buffer.pkl', 'rb'))
@@ -123,18 +144,21 @@ for id_task in tqdm(range(1, 11)):
 # knn
 print('-- Computing bbs')
 from utils.spectral_analysis import calc_cos_dist, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs, calc_ADL_heat
-wrong_cons = []
+meass, meas_norms = [], []
 for id_task in tqdm(range(1, 11)):
     features = all_data[(model, reg, buf_size)][id_task]['bproj']
     labels = all_data[(model, reg, buf_size)][id_task]['by']
     
     knn_laplace = 5 if buf_size == 500 else 4 #int(bbasename(foldername).split('-')[0].split('K')[-1])
     dists = calc_euclid_dist(features)
-    A, _, _ = calc_ADL_knn(dists, k=knn_laplace, symmetric=True)
+    A, D, _ = calc_ADL_knn(dists, k=knn_laplace, symmetric=True)
+    A_norm = D.pow(-1/2) @ A @ D.pow(-1/2)
     lab_mask = labels.unsqueeze(0) == labels.unsqueeze(1)
-    wrong_A = A[~lab_mask]
-    wrong_cons.append(wrong_A.sum() / A.sum())
+    meas_a = A[~lab_mask].sum()
+    meas_norm = A_norm[~lab_mask].sum()
+    meass.append(meas_a)
+    meas_norms.append(meas_norm)
 
-print('-- Saving to', os.path.join(foldername, 'rebuf.pkl'), '\n')
-with open(os.path.join(foldername, 'rebuf.pkl'), 'wb') as f:
-    pickle.dump((model, buf_size, reg, wrong_cons), f)
+print('-- Saving to', os.path.join(foldername, 'bufbagu.pkl'), '\n')
+with open(os.path.join(foldername, 'bufbagu.pkl'), 'wb') as f:
+    pickle.dump((model, buf_size, reg, meass, meas_norms), f)

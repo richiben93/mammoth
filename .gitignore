@@ -178,3 +178,4 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 illustrations/loss_landscape/computed_matrices2/
+notebooks/egap_no_egap/cps

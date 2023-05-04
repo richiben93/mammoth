@@ -1,10 +1,13 @@
+import numpy as np
 from re import sub
 import torch
-import numpy as np
 import os
 from tqdm import tqdm as el_tqdm
 from argparse import Namespace, ArgumentParser
 import pickle
+from sklearn.neighbors import KNeighborsClassifier
+os.putenv("MKL_SERVICE_FORCE_INTEL", "1")
+os.putenv("NPY_MKL_FORCE_INTEL", "1")
 
 import wandb
 
@@ -15,17 +18,22 @@ def bbasename(path):
 
 def find_args(foldername):
     api = wandb.Api(timeout=180)
-    entity, project = 'regaz', 'rodo-istatsTEMP'
-    for runna in api.runs(f'{entity}/{project}'):
-        if runna.name == bbasename(foldername).split('_')[0]:
-            print('-- Run found!')
-            return runna.config['model'], runna.config['buffer_size'], 'egap' if 'egap' in runna.config['name'].lower() else 'none'
+    
+    entity = 'regaz'
+    for project in ['rodo-istatsJIHAD', 'rodo-istats', 'rodo-istatsTEMP']:
+        for runna in api.runs(f'{entity}/{project}'):
+            if runna.name == bbasename(foldername).split('_')[0]:
+                print('-- Run found!')
+                return runna.config['model'], runna.config['buffer_size'], 'egap' if 'egap' in runna.config['name'].lower() else 'none'
+    
     raise ValueError(f'Could not find run for {foldername}')
 
 args = ArgumentParser()
 args.add_argument('foldername', type=str)
+args.add_argument('--knn_k', type=int, default=5)
 args = args.parse_args()
 
+argsknnk = args.knn_k
 torch.set_grad_enabled(False)
 conf_path = os.getcwd()
 while not 'mammoth' in bbasename(conf_path):
@@ -43,7 +51,7 @@ device = get_device()
 from datasets.seq_cifar100 import SequentialCIFAR100_10x10
 print('-- Searching run', args.foldername)
 model, buf_size, reg = find_args(args.foldername)
-if os.path.exists(os.path.join(args.foldername, 'rebuf.pkl')):
+if os.path.exists(os.path.join(args.foldername, f'knnTRAIN_{argsknnk}.txt')):
     print("-- ALREADY DONE, ABORTING\n")
     exit()
 
@@ -55,12 +63,7 @@ args = Namespace(
             validation=False,
 )
 dataset = SequentialCIFAR100_10x10(args)
-dataset.get_data_loaders()
-# data_loaders = [dataset.get_data_loaders()[0] for _ in range(dataset.N_TASKS)]
-
-
-mymodel = "Derpp"#'Erace'
-load = True
+data_loaders = [dataset.get_data_loaders()[0] for _ in range(dataset.N_TASKS)]
 
 all_data = {}
 
@@ -71,6 +74,8 @@ if path[-1] != '/':
 
 print('-- Loading models')
 for id_task in range(1, 11):
+    if id_task not in [10]:
+        continue
     net = resnet18(100)
     if model == 'podnet_egap':
         from models.podnet_egap import PodNetEgap
@@ -99,42 +104,44 @@ for id_task in range(1, 11):
     all_data[(model, reg, buf_size)][id_task]['net'] = net
     all_data[(model, reg, buf_size)][id_task]['buf'] = buf
 
-print('-- Computing projections')
+print('-- Computing knn')
 for id_task in tqdm(range(1, 11)):
-    
-    
+    if id_task not in [10]:
+        continue
     net = all_data[(model, reg, buf_size)][id_task]['net']
-    all_data[(model, reg, buf_size)][id_task]['projs'] = []
-    all_data[(model, reg, buf_size)][id_task]['preds'] = []
-    all_data[(model, reg, buf_size)][id_task]['labs'] = []
-    net.to(device)    
+    net.to(device)
 
-    buf = all_data[(model, reg, buf_size)][id_task]['buf']
-    bufdata = buf.get_data(buf.buffer_size, transform=dataset.test_loaders[0].dataset.transform.transforms[1])
-    bx, by = bufdata[0], bufdata[1]
-    bx = bx.to(device)
-    by = by
-    bproj = net.features(bx).cpu()
-    all_data[(model, reg, buf_size)][id_task][f'bproj'] = bproj
-    all_data[(model, reg, buf_size)][id_task][f'by'] = by
-    
+    train_preds, train_y = [], []
+    for j, dl in enumerate(data_loaders):
+        for x, y, _ in dl:
+            x = x.to(device)
+            y = y
+            proj = net.features(x).cpu()
+            train_preds.append(proj)
+            train_y.append(y)
+    train_preds = torch.cat(train_preds, dim=0)
+    train_y = torch.cat(train_y, dim=0)
+
+    cfier = KNeighborsClassifier(n_neighbors=argsknnk).fit(train_preds, train_y)
+
+    for j, dl in enumerate(dataset.test_loaders[:id_task]):
+        corrknn, tot = 0, 0
+        for x, y in dl:
+            x = x.to(device)
+            y = y
+            proj = net.features(x).cpu()
+            pred_knn = cfier.predict(proj)  
+            corrknn += (pred_knn == y.cpu().numpy()).sum().item()
+            tot += len(y)
+            
+        all_data[(model, reg, buf_size)][id_task][f'knn_{j}'] = corrknn / tot
+    all_data[(model, reg, buf_size)][id_task][f'knn_mean'] = np.mean([all_data[(model, reg, buf_size)][id_task][f'knn_{j}'] for j in range(id_task)])
+    del all_data[(model, reg, buf_size)][id_task]['net']
+    del all_data[(model, reg, buf_size)][id_task]['buf']
     net.to('cpu')
 
-# knn
-print('-- Computing bbs')
-from utils.spectral_analysis import calc_cos_dist, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs, calc_ADL_heat
-wrong_cons = []
-for id_task in tqdm(range(1, 11)):
-    features = all_data[(model, reg, buf_size)][id_task]['bproj']
-    labels = all_data[(model, reg, buf_size)][id_task]['by']
-    
-    knn_laplace = 5 if buf_size == 500 else 4 #int(bbasename(foldername).split('-')[0].split('K')[-1])
-    dists = calc_euclid_dist(features)
-    A, _, _ = calc_ADL_knn(dists, k=knn_laplace, symmetric=True)
-    lab_mask = labels.unsqueeze(0) == labels.unsqueeze(1)
-    wrong_A = A[~lab_mask]
-    wrong_cons.append(wrong_A.sum() / A.sum())
 
-print('-- Saving to', os.path.join(foldername, 'rebuf.pkl'), '\n')
-with open(os.path.join(foldername, 'rebuf.pkl'), 'wb') as f:
-    pickle.dump((model, buf_size, reg, wrong_cons), f)
+
+print('-- Saving to file', os.path.join(foldername, f'knnTRAIN_{argsknnk}.txt'))
+with open(os.path.join(foldername, f'knnTRAIN_{argsknnk}.txt'), 'w') as f:
+    f.write(str(all_data))

@@ -15,11 +15,13 @@ def bbasename(path):
 
 def find_args(foldername):
     api = wandb.Api(timeout=180)
-    entity, project = 'regaz', 'rodo-istatsTEMP'
-    for runna in api.runs(f'{entity}/{project}'):
-        if runna.name == bbasename(foldername).split('_')[0]:
-            print('-- Run found!')
-            return runna.config['model'], runna.config['buffer_size'], 'egap' if 'egap' in runna.config['name'].lower() else 'none'
+    entity = 'regaz'
+    for project in ['casper-icml', 'rodo-istatsJIHAD', 'rodo-istats', 'rodo-istatsTEMP']:
+        for runna in api.runs(f'{entity}/{project}'):
+            if runna.name == bbasename(foldername):#.split('_')[0]:
+                print('-- Run found!')
+                return runna.config['model'], runna.config['buffer_size'], 'egap' if ('egap' in runna.config['name'].lower() or 'casper' in runna.config['name'].lower()) else 'none'
+    
     raise ValueError(f'Could not find run for {foldername}')
 
 args = ArgumentParser()
@@ -43,7 +45,7 @@ device = get_device()
 from datasets.seq_cifar100 import SequentialCIFAR100_10x10
 print('-- Searching run', args.foldername)
 model, buf_size, reg = find_args(args.foldername)
-if os.path.exists(os.path.join(args.foldername, 'rebuf.pkl')):
+if os.path.exists(os.path.join(args.foldername, 'testfeats.pkl')):
     print("-- ALREADY DONE, ABORTING\n")
     exit()
 
@@ -56,7 +58,7 @@ args = Namespace(
 )
 dataset = SequentialCIFAR100_10x10(args)
 dataset.get_data_loaders()
-# data_loaders = [dataset.get_data_loaders()[0] for _ in range(dataset.N_TASKS)]
+data_loaders = [dataset.get_data_loaders()[0] for _ in range(2)]
 
 
 mymodel = "Derpp"#'Erace'
@@ -72,8 +74,8 @@ if path[-1] != '/':
 print('-- Loading models')
 for id_task in range(1, 11):
     net = resnet18(100)
-    if model == 'podnet_egap':
-        from models.podnet_egap import PodNetEgap
+    if model == 'scr_casper':
+        from models.scr_casper import SCRCasper
         args.rep_minibatch = 64
         args.replay_mode = 'none'
         args.lr = 0.1
@@ -82,59 +84,60 @@ for id_task in range(1, 11):
         args.wandb = False
         args.buffer_size= buf_size
         args.scheduler= None
-        args.k=10
-        args.scaling=3
-        args.eta =1
-        args.delta=0.6
+        args.head='mlp'
+        args.b_nclasses=16
+        args.load_check=None
+        args.backbone='resnet18'
+        args.temp=0.1
         args.wb_prj, args.wb_entity = 'regaz', 'rodo-istatsTEMP'
-        t_model = PodNetEgap(net, lambda x: x, args, None)
+        t_model = SCRCasper(net, lambda x:x, args, None)
         net = t_model.net
-        
+    if model in ['scr_derpp', 'scr_xder_rpc']:
+        from models.scr_derpp import SCRDerpp
+        args.rep_minibatch = 64
+        args.replay_mode = 'none'
+        args.lr = 0.1
+        args.model = model
+        args.lr_momentum = 0
+        args.wandb = False
+        args.buffer_size= buf_size
+        args.scheduler= None
+        args.head='mlp'
+        args.load_check=None
+        args.backbone='resnet18'
+        args.temp=0.1
+        args.wb_prj, args.wb_entity = 'regaz', 'rodo-istatsTEMP'
+        args.alpha = 0.1
+        args.beta = 0.1
+        t_model = SCRDerpp(net, lambda x:x, args, None)
+        net = t_model.net
     sd = torch.load(path + f'task_{id_task}.pt', map_location='cpu')
     net.load_state_dict(sd)
     net.eval()
-    buf = pickle.load(open(path + f'task_{id_task}_buffer.pkl', 'rb'))
-
     all_data[(model, reg, buf_size)][id_task] = {}
     all_data[(model, reg, buf_size)][id_task]['net'] = net
-    all_data[(model, reg, buf_size)][id_task]['buf'] = buf
 
 print('-- Computing projections')
 for id_task in tqdm(range(1, 11)):
-    
-    
     net = all_data[(model, reg, buf_size)][id_task]['net']
-    all_data[(model, reg, buf_size)][id_task]['projs'] = []
-    all_data[(model, reg, buf_size)][id_task]['preds'] = []
-    all_data[(model, reg, buf_size)][id_task]['labs'] = []
     net.to(device)    
-
-    buf = all_data[(model, reg, buf_size)][id_task]['buf']
-    bufdata = buf.get_data(buf.buffer_size, transform=dataset.test_loaders[0].dataset.transform.transforms[1])
-    bx, by = bufdata[0], bufdata[1]
-    bx = bx.to(device)
-    by = by
-    bproj = net.features(bx).cpu()
-    all_data[(model, reg, buf_size)][id_task][f'bproj'] = bproj
-    all_data[(model, reg, buf_size)][id_task][f'by'] = by
+    good_labels = torch.tensor([0, 2, 5, 8, 9, 11, 13, 14, 16, 18])
+    feats, labels = [], []
+    for d in dataset.test_loaders:
+        for x, y in d:
+            bx = x.to(device)
+            if torch.isin(y, good_labels).any():
+                bproj = net.features(bx[torch.isin(y, good_labels)]).cpu()
+                feats.append(bproj)
+                labels.append(y[torch.isin(y, good_labels)])
+    all_data[(model, reg, buf_size)][id_task][f'bproj'] = torch.cat(feats)
+    all_data[(model, reg, buf_size)][id_task][f'by'] = torch.cat(labels)
     
     net.to('cpu')
 
-# knn
-print('-- Computing bbs')
-from utils.spectral_analysis import calc_cos_dist, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs, calc_ADL_heat
-wrong_cons = []
 for id_task in tqdm(range(1, 11)):
-    features = all_data[(model, reg, buf_size)][id_task]['bproj']
-    labels = all_data[(model, reg, buf_size)][id_task]['by']
-    
-    knn_laplace = 5 if buf_size == 500 else 4 #int(bbasename(foldername).split('-')[0].split('K')[-1])
-    dists = calc_euclid_dist(features)
-    A, _, _ = calc_ADL_knn(dists, k=knn_laplace, symmetric=True)
-    lab_mask = labels.unsqueeze(0) == labels.unsqueeze(1)
-    wrong_A = A[~lab_mask]
-    wrong_cons.append(wrong_A.sum() / A.sum())
+    del all_data[(model, reg, buf_size)][id_task]['net']
 
-print('-- Saving to', os.path.join(foldername, 'rebuf.pkl'), '\n')
-with open(os.path.join(foldername, 'rebuf.pkl'), 'wb') as f:
-    pickle.dump((model, buf_size, reg, wrong_cons), f)
+print('-- Saving to', os.path.join(foldername, 'testfeats.pkl'), '\n')
+with open(os.path.join(foldername, 'testfeats.pkl'), 'wb') as f:
+    pickle.dump(all_data, f)

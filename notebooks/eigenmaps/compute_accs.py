@@ -15,6 +15,13 @@ def bbasename(path):
 
 def find_args(foldername):
     api = wandb.Api(timeout=180)
+    
+    entity, project = 'regaz', 'rodo-istats'
+    for runna in api.runs(f'{entity}/{project}'):
+        if runna.name == bbasename(foldername).split('_')[0]:
+            print('-- Run found!')
+            return runna.config['model'], runna.config['buffer_size'], 'egap' if 'egap' in runna.config['name'].lower() else 'none'
+
     entity, project = 'regaz', 'rodo-istatsTEMP'
     for runna in api.runs(f'{entity}/{project}'):
         if runna.name == bbasename(foldername).split('_')[0]:
@@ -43,7 +50,7 @@ device = get_device()
 from datasets.seq_cifar100 import SequentialCIFAR100_10x10
 print('-- Searching run', args.foldername)
 model, buf_size, reg = find_args(args.foldername)
-if os.path.exists(os.path.join(args.foldername, 'rebuf.pkl')):
+if os.path.exists(os.path.join(args.foldername, 'acc.txt')):
     print("-- ALREADY DONE, ABORTING\n")
     exit()
 
@@ -55,8 +62,7 @@ args = Namespace(
             validation=False,
 )
 dataset = SequentialCIFAR100_10x10(args)
-dataset.get_data_loaders()
-# data_loaders = [dataset.get_data_loaders()[0] for _ in range(dataset.N_TASKS)]
+data_loaders = [dataset.get_data_loaders()[0] for _ in range(dataset.N_TASKS)]
 
 
 mymodel = "Derpp"#'Erace'
@@ -100,41 +106,31 @@ for id_task in range(1, 11):
     all_data[(model, reg, buf_size)][id_task]['buf'] = buf
 
 print('-- Computing projections')
-for id_task in tqdm(range(1, 11)):
-    
-    
-    net = all_data[(model, reg, buf_size)][id_task]['net']
-    all_data[(model, reg, buf_size)][id_task]['projs'] = []
-    all_data[(model, reg, buf_size)][id_task]['preds'] = []
-    all_data[(model, reg, buf_size)][id_task]['labs'] = []
-    net.to(device)    
+with open(os.path.join(foldername, 'acc.txt'), 'w') as f:
+    for id_task in tqdm(range(1, 11)):
+        net = all_data[(model, reg, buf_size)][id_task]['net']
+        all_data[(model, reg, buf_size)][id_task]['projs'] = []
+        all_data[(model, reg, buf_size)][id_task]['preds'] = []
+        all_data[(model, reg, buf_size)][id_task]['labs'] = []
+        net.to(device)    
 
-    buf = all_data[(model, reg, buf_size)][id_task]['buf']
-    bufdata = buf.get_data(buf.buffer_size, transform=dataset.test_loaders[0].dataset.transform.transforms[1])
-    bx, by = bufdata[0], bufdata[1]
-    bx = bx.to(device)
-    by = by
-    bproj = net.features(bx).cpu()
-    all_data[(model, reg, buf_size)][id_task][f'bproj'] = bproj
-    all_data[(model, reg, buf_size)][id_task][f'by'] = by
-    
-    net.to('cpu')
+        for j, dl in enumerate(dataset.test_loaders[:id_task]):
+            corr, corrknn, tot = 0, 0, 0
+            for x, y in dl:
+                x = x.to(device)
+                y = y
+                pred = net(x).cpu()
+                if model == 'podnet_egap':
+                    pred = torch.ones(pred.shape[0], 100)
+                proj = net.features(x).cpu()
+                corr += (pred.argmax(dim=1) == y).sum().item()
+                tot += len(y)
+                
+                
+            all_data[(model, reg, buf_size)][id_task][f'acc_{j}'] = corr / tot
+            f.write(f'{model} {reg} {buf_size} {id_task} {j} {corr / tot}\n')
+        accmean = np.mean([all_data[(model, reg, buf_size)][id_task][f'acc_{j}'] for j in range(id_task)])
+        f.write(f'{model} {reg} {buf_size} {id_task} {accmean}\n\n')
+        net.to('cpu')
 
-# knn
-print('-- Computing bbs')
-from utils.spectral_analysis import calc_cos_dist, calc_euclid_dist, calc_ADL_knn, normalize_A, find_eigs, calc_ADL_heat
-wrong_cons = []
-for id_task in tqdm(range(1, 11)):
-    features = all_data[(model, reg, buf_size)][id_task]['bproj']
-    labels = all_data[(model, reg, buf_size)][id_task]['by']
-    
-    knn_laplace = 5 if buf_size == 500 else 4 #int(bbasename(foldername).split('-')[0].split('K')[-1])
-    dists = calc_euclid_dist(features)
-    A, _, _ = calc_ADL_knn(dists, k=knn_laplace, symmetric=True)
-    lab_mask = labels.unsqueeze(0) == labels.unsqueeze(1)
-    wrong_A = A[~lab_mask]
-    wrong_cons.append(wrong_A.sum() / A.sum())
-
-print('-- Saving to', os.path.join(foldername, 'rebuf.pkl'), '\n')
-with open(os.path.join(foldername, 'rebuf.pkl'), 'wb') as f:
-    pickle.dump((model, buf_size, reg, wrong_cons), f)
+print('-- Done')
